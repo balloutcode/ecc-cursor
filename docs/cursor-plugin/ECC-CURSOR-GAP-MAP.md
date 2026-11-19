@@ -65,15 +65,15 @@ _Проверено через GitHub API 19.11.2026 в 19:40 (МСК), посл
 ### Шаг 0 — импорт ECC в репозиторий (один раз, до фазы 0)
 
 Подготовка (руками, 1 минута):
-1. Сохрани `ECC-CURSOR-GAP-MAP.md` в `C:\Users\alext\Downloads\`.
-2. В Cursor: File → Open Folder → `C:\Users\alext\Documents\CursorRepos\ecc-cursor` (папка уже создана).
+1. Сохрани `ECC-CURSOR-GAP-MAP.md` в `C:\Users\<user>\Downloads\`.
+2. В Cursor: File → Open Folder → `C:\Users\<user>\Documents\CursorRepos\ecc-cursor` (папка уже создана).
 3. Новый чат, режим Agent, модель Kimi K3 (High хватит). Вставь промпт ниже. ОБЩИЕ ПРАВИЛА здесь не нужны.
 4. Когда агент закончит, в этой же папке открывай новый чат в Plan Mode — фаза 0.
 
 ```text
 Задача: один раз импортировать ECC в мой пустой репозиторий github.com/balloutcode/ecc-cursor. Только git и npm,
 никаких правок файлов кроме копирования одного документа. Windows, PowerShell.
-Рабочая папка — текущая: C:\Users\alext\Documents\CursorRepos\ecc-cursor. Она уже существует.
+Рабочая папка — текущая: C:\Users\<user>\Documents\CursorRepos\ecc-cursor. Она уже существует.
 
 Жёсткие правила:
 - Работай ТОЛЬКО в этой папке. Никаких других клонов и папок (C:\dev, временных клонов, worktree) не создавать.
@@ -94,7 +94,7 @@ git fetch upstream main --no-tags
 git checkout -b main upstream/main                            # «upstream is gone» — норма, репо пустой
 git push -u origin main                                       # теперь main отслеживает origin/main
 New-Item -ItemType Directory -Force docs\cursor-plugin
-Copy-Item C:\Users\alext\Downloads\ECC-CURSOR-GAP-MAP.md docs\cursor-plugin\
+Copy-Item C:\Users\<user>\Downloads\ECC-CURSOR-GAP-MAP.md docs\cursor-plugin\
 git add docs/cursor-plugin/ECC-CURSOR-GAP-MAP.md
 git commit -m "docs(cursor-plugin): gap map"
 git push
