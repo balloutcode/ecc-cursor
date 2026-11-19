@@ -6,9 +6,9 @@
  * checklist (cursor.com/docs/reference/plugins; PLAN.md section 3):
  *   - .cursor-plugin/plugin.json with kebab-case name
  *   - component paths relative, no '..', existing
- *   - valid frontmatter on every component (agents/commands: fail;
- *     skills: fail with name==folder; rules: warn in phase 1, the identity
- *     build keeps 10 common rules without frontmatter - phase 2 fixes)
+ *   - valid frontmatter on every component (agents/commands/skills/rules:
+ *     fail; rules must carry description + alwaysApply, no `paths:`, no
+ *     `.claude/` references - phase 2 transform guarantees this)
  *   - no Claude model ids in agents (hard rule)
  *   - README.md present; all ${VAR}s used in mcp.json declared in variables
  * Exit 0 when there are no failures (warnings are reported but tolerated).
@@ -24,7 +24,6 @@ const PLUGIN_ROOT = path.join(REPO_ROOT, 'build', 'cursor-plugin', 'ecc-cursor')
 const failures = [];
 const warnings = [];
 const fail = msg => failures.push(msg);
-const warn = msg => warnings.push(msg);
 
 function listMd(dir, ext) {
   if (!fs.existsSync(dir)) return [];
@@ -132,14 +131,22 @@ function validateSkills() {
 
 function validateRules() {
   let count = 0;
-  let noFm = 0;
   for (const file of listMd(path.join(PLUGIN_ROOT, 'rules'), '.mdc')) {
     count += 1;
-    const fm = T.splitFrontmatter(fs.readFileSync(file, 'utf8')).frontmatter;
-    if (!fm) noFm += 1;
-  }
-  if (noFm > 0) {
-    warn(`rules: ${noFm} of ${count} .mdc files have no frontmatter (phase 1 identity; phase 2 adds globs/alwaysApply)`);
+    const content = fs.readFileSync(file, 'utf8');
+    const rel = path.relative(PLUGIN_ROOT, file);
+    const fm = T.splitFrontmatter(content).frontmatter;
+    if (!fm) {
+      fail(`rule without frontmatter: ${rel}`);
+      continue;
+    }
+    if (!T.getFrontmatterField(fm, 'description')) fail(`rule without description: ${rel}`);
+    if (T.getFrontmatterField(fm, 'alwaysApply') === null) fail(`rule without alwaysApply: ${rel}`);
+    if (T.getFrontmatterField(fm, 'alwaysApply') === 'false' && !/^globs:/m.test(fm)) {
+      fail(`rule with alwaysApply: false but no globs: ${rel}`);
+    }
+    if (/^paths:/m.test(fm)) fail(`rule still has Claude-style paths: ${rel}`);
+    if (content.includes('.claude/')) fail(`rule references .claude/: ${rel}`);
   }
   return count;
 }

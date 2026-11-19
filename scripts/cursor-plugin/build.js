@@ -2,10 +2,12 @@
 'use strict';
 
 /**
- * ecc-cursor plugin builder (phase 1: identity build).
+ * ecc-cursor plugin builder (phase 2: rules + contexts).
  *
- * Reads upstream ECC sources (never modifies them), applies the phase-1
- * transform set (identity + agent `model: inherit`), and writes a ready
+ * Reads upstream ECC sources (never modifies them), applies the transform
+ * set (rules: paths->globs + native .cursor/rules copies + link fixes;
+ * agents: `model: inherit`; contexts: ecc-context-* skills; markdown:
+ * rules/<ns>/<f>.md -> rules/<ns>-<f>.mdc references), and writes a ready
  * Cursor plugin to build/cursor-plugin/ecc-cursor/ plus a build report to
  * build/cursor-plugin/report.json.
  *
@@ -28,6 +30,7 @@ const path = require('path');
 const { builtinModules } = require('module');
 
 const T = require('../lib/cursor-plugin/transforms');
+const R = require('../lib/cursor-plugin/rules');
 const { generateHooksJson, loadHookMap, serialize } = require('./generate-hooks');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -92,8 +95,11 @@ function collectRules(warnings) {
   const ops = [];
   const skipped = [];
   const rulesRoot = path.join(REPO_ROOT, 'rules');
+  const nativeRules = R.listNativeRules(REPO_ROOT);
+  const usedNative = new Set();
+  const stats = { total: 0, native: 0, upstream: 0, alwaysApplyTrue: 0, withGlobs: 0, withoutSourceFrontmatter: 0 };
+  const seen = new Map(); // destRel -> source path (collision guard)
   const entries = fs.readdirSync(rulesRoot, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
-  let withoutFrontmatter = 0;
   for (const entry of entries) {
     if (entry.isFile()) {
       skipped.push({ path: `rules/${entry.name}`, reason: 'documentation file, not a rule' });
@@ -106,18 +112,38 @@ function collectRules(warnings) {
         skipped.push({ path: `rules/${entry.name}/${rel}`, reason: 'README, not a rule' });
         continue;
       }
-      const content = fs.readFileSync(path.join(rulesRoot, entry.name, rel), 'utf8');
-      if (!T.splitFrontmatter(content).frontmatter) withoutFrontmatter += 1;
-      ops.push(createOp(path.join(rulesRoot, entry.name, rel), path.join('rules', flat)));
+      const srcAbs = path.join(rulesRoot, entry.name, rel);
+      const destRel = path.join('rules', flat);
+      const prev = seen.get(destRel);
+      if (prev) {
+        throw new Error(`rule name collision: ${destRel} from rules/${entry.name}/${rel} and ${prev}`);
+      }
+      seen.set(destRel, `rules/${entry.name}/${rel}`);
+
+      const flatName = flat.replace(/\.mdc$/, '');
+      const nativePath = nativeRules.get(flatName) || null;
+      const content = fs.readFileSync(srcAbs, 'utf8');
+      const nativeContent = nativePath ? fs.readFileSync(nativePath, 'utf8') : null;
+      const rendered = R.transformRule({ namespace: entry.name, relFile: rel, content, nativeContent });
+
+      stats.total += 1;
+      stats[rendered.meta.source] += 1;
+      if (rendered.meta.alwaysApply) stats.alwaysApplyTrue += 1;
+      if (rendered.meta.globs) stats.withGlobs += 1;
+      if (nativePath) usedNative.add(flatName);
+      if (!nativePath && rendered.meta.hadFrontmatter === false) stats.withoutSourceFrontmatter += 1;
+
+      ops.push(createOp(srcAbs, destRel, () => rendered.content));
     }
   }
-  if (withoutFrontmatter > 0) {
-    warnings.push(`rules: ${withoutFrontmatter} files without frontmatter (identity build; phase 2 adds globs/alwaysApply)`);
+  const unmatchedNative = [...nativeRules.keys()].filter(n => !usedNative.has(n)).sort();
+  if (unmatchedNative.length > 0) {
+    warnings.push(`rules: ${unmatchedNative.length} native .cursor/rules copies match no upstream rule: ${unmatchedNative.join(', ')}`);
   }
-  return { ops, skipped };
+  return { ops, skipped, stats };
 }
 
-function collectAgents(warnings) {
+function collectAgents(warnings, ruleRefs) {
   const ops = [];
   const agentsRoot = path.join(REPO_ROOT, 'agents');
   const modelStats = {};
@@ -127,12 +153,12 @@ function collectAgents(warnings) {
     const model = T.getFrontmatterField(fm, 'model');
     modelStats[model || '(none)'] = (modelStats[model || '(none)'] || 0) + 1;
     if (!model) warnings.push(`agents: ${f} has no model field (left as-is)`);
-    ops.push(createOp(path.join(agentsRoot, f), path.join('agents', f), T.agentModelInherit));
+    ops.push(createOp(path.join(agentsRoot, f), path.join('agents', f), c => ruleRefs(T.agentModelInherit(c))));
   }
   return { ops, modelStats };
 }
 
-function collectSkills(skillSet, exclusions) {
+function collectSkills(skillSet, exclusions, ruleRefs) {
   const ops = [];
   const skipped = [];
   const included = [...skillSet].filter(s => !exclusions.skills[s]).sort();
@@ -142,17 +168,32 @@ function collectSkills(skillSet, exclusions) {
   for (const name of included) {
     const skillDir = path.join(REPO_ROOT, 'skills', name);
     for (const rel of listFilesRecursive(skillDir)) {
-      ops.push(createOp(path.join(skillDir, rel), path.join('skills', name, rel)));
+      const isMarkdown = rel.endsWith('.md');
+      ops.push(createOp(path.join(skillDir, rel), path.join('skills', name, rel), isMarkdown ? ruleRefs : null));
     }
   }
   return { ops, skipped, included };
 }
 
-function collectCommands() {
+function collectContexts() {
+  const ops = [];
+  const contextsRoot = path.join(REPO_ROOT, 'contexts');
+  const ids = [];
+  for (const f of fs.readdirSync(contextsRoot).filter(f => f.endsWith('.md')).sort()) {
+    const id = f.slice(0, -3);
+    const name = `ecc-context-${id}`;
+    const content = R.buildContextSkill(id, fs.readFileSync(path.join(contextsRoot, f), 'utf8'));
+    ids.push(id);
+    ops.push(createOp(path.join(contextsRoot, f), path.join('skills', name, 'SKILL.md'), () => content));
+  }
+  return { ops, ids };
+}
+
+function collectCommands(ruleRefs) {
   const ops = [];
   const commandsRoot = path.join(REPO_ROOT, 'commands');
   for (const f of fs.readdirSync(commandsRoot).filter(f => f.endsWith('.md')).sort()) {
-    ops.push(createOp(path.join(commandsRoot, f), path.join('commands', f)));
+    ops.push(createOp(path.join(commandsRoot, f), path.join('commands', f), ruleRefs));
   }
   const overrideRoot = path.join(LAYER_ROOT, 'overrides', 'commands');
   const overrideNames = [];
@@ -161,7 +202,7 @@ function collectCommands() {
       if (ops.some(o => o.destRel === `commands/${f}`)) {
         throw new Error(`override command collides with upstream command: ${f}`);
       }
-      ops.push(createOp(path.join(overrideRoot, f), path.join('commands', f)));
+      ops.push(createOp(path.join(overrideRoot, f), path.join('commands', f), ruleRefs));
       overrideNames.push(f);
     }
   }
@@ -301,10 +342,12 @@ function build() {
   const warnings = [];
   const skipped = [];
 
+  const ruleRefs = R.createRuleRefTransform(R.listRuleNamespaces(REPO_ROOT));
   const rules = collectRules(warnings);
-  const agents = collectAgents(warnings);
-  const skills = collectSkills(composition.skillSet, exclusions);
-  const commands = collectCommands();
+  const agents = collectAgents(warnings, ruleRefs);
+  const skills = collectSkills(composition.skillSet, exclusions, ruleRefs);
+  const contexts = collectContexts();
+  const commands = collectCommands(ruleRefs);
   const hooks = collectHooks(hookMap);
   skipped.push(...rules.skipped, ...skills.skipped);
 
@@ -345,7 +388,7 @@ function build() {
     createOp(path.join(LAYER_ROOT, 'assets', 'logo.svg'), path.join('assets', 'logo.svg')),
   ];
 
-  const allOps = [...rules.ops, ...agents.ops, ...skills.ops, ...commands.ops, ...hooks.ops, ...scripts.ops, ...staticOps]
+  const allOps = [...rules.ops, ...agents.ops, ...skills.ops, ...contexts.ops, ...commands.ops, ...hooks.ops, ...scripts.ops, ...staticOps]
     .sort((a, b) => a.destRel.localeCompare(b.destRel));
 
   // write
@@ -378,7 +421,7 @@ function build() {
     .sort();
 
   const report = {
-    phase: 1,
+    phase: 2,
     profile: 'full',
     modules: {
       included: composition.fullModules,
@@ -388,13 +431,22 @@ function build() {
     counts: {
       rules: rules.ops.length,
       agents: agents.ops.length,
-      skills: skills.included.length,
+      skills: skills.included.length + contexts.ops.length,
       commands: { upstream: commands.upstreamCount, overrides: commands.overrideNames.length, total: commands.ops.length },
       hooks: { events: hookEvents, entries: hookEntries },
       scripts: scripts.files.length,
       files: totalFiles,
       bytes,
     },
+    rules: {
+      total: rules.stats.total,
+      withNativeFrontmatter: rules.stats.native,
+      fromUpstream: rules.stats.upstream,
+      alwaysApplyTrue: rules.stats.alwaysApplyTrue,
+      withGlobs: rules.stats.withGlobs,
+      withoutSourceFrontmatter: rules.stats.withoutSourceFrontmatter,
+    },
+    contextSkills: contexts.ids.map(id => `ecc-context-${id}`).sort(),
     agentModelStats: agents.modelStats,
     excluded: {
       skills: Object.fromEntries(Object.entries(exclusions.skills).sort((a, b) => a[0].localeCompare(b[0]))),
@@ -419,10 +471,10 @@ function build() {
 if (require.main === module) {
   const report = build();
   const c = report.counts;
-  console.log('ecc-cursor build OK (phase 1, identity)');
-  console.log(`  rules:    ${c.rules}`);
+  console.log('ecc-cursor build OK (phase 2: rules + contexts)');
+  console.log(`  rules:    ${c.rules} (native frontmatter: ${report.rules.withNativeFrontmatter}/${report.rules.total}, alwaysApply true: ${report.rules.alwaysApplyTrue})`);
   console.log(`  agents:   ${c.agents}`);
-  console.log(`  skills:   ${c.skills}`);
+  console.log(`  skills:   ${c.skills} (${report.contextSkills.length} context skills)`);
   console.log(`  commands: ${c.commands.total} (upstream ${c.commands.upstream} + overrides ${c.commands.overrides})`);
   console.log(`  hooks:    ${c.hooks.events} events, ${c.hooks.entries} entries`);
   console.log(`  scripts:  ${c.scripts} (require-closure, ${report.scriptClosure.seeds.length} seeds)`);
