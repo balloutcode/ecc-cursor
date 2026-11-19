@@ -46,9 +46,19 @@ Developer: Reload Window:
 - [x] **workspace_roots** присутствует, НО формат `/c:/Users/...` (ведущий слэш,
   прямые слэши) — невалидный win32-путь для fs; добавлена нормализация
   `normalizeWorkspaceRoot` в run.js (+ тест).
-- [ ] **sessionStart** — записей нет: требуется свежий чат после Reload Window
-  (сессия, стартовавшая до установки, событие не шлёт).
-- [ ] **subagentStop** — записей нет: нужен запуск сабагента (Task).
+- [x] **sessionStart** (19.11.2026, 19:43:50 и 19:44:02): срабатывает в ОБЕИХ
+  формах (A и B), cwd = папка плагина. Edge: первый вызов пришёл с ПУСТЫМИ
+  `CURSOR_PROJECT_DIR` ("") и `workspace_roots` ([]) — сессия без workspace-
+  контекста; через ~12 сек повторился с заполненными значениями. Цепочка
+  run.js это выдерживает (пустое -> фолбэк на cwd), но тогда project dir =
+  папка плагина: фаза 6 должна решить, не выставлять ли CLAUDE_PROJECT_DIR
+  вовсе при пустом workspace-контексте.
+- [x] **subagentStop** (19.11.2026, 19:44:34): срабатывает ТОЛЬКО в форме A,
+  cwd = корень workspace (форме B не хватает cwd, как у stop). Payload:
+  subagent_type, task, agent_transcript_path, tool_call_count, duration_ms,
+  parent_agent_id, child_conversation_id, status. Бонус-факты: preToolUse
+  стреляет и на tool_name "Task"; вызовы внутри сабагента несут
+  parent_agent_id/parent_tool_call_id; Shell-вызовы несут ключ cwd.
 - [ ] **displayName/category** в Customize и латентность списка из 322 скиллов —
   ожидает наблюдения пользователя.
 - [ ] **Output -> Hooks**: наличие ошибок (в т.ч. молчаливых отказов формы B для
