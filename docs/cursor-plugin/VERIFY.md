@@ -36,8 +36,8 @@ Developer: Reload Window:
   `./hooks/probe.js` там не резолвится, молчаливый отказ (как предсказывал PLAN).
   Вывод: форма B непригодна для stop/subagentStop -> выбрана форма A.
 - [x] **cwd stop/subagentStop = корень workspace** — подтверждено (stop:
-  `C:\Users\alext\Documents\CursorRepos\ecc-cursor`).
-- [x] **CURSOR_PLUGIN_ROOT** установлен: `C:\Users\alext\.cursor\plugins\local\ecc-cursor`.
+  `$env:USERPROFILE\Documents\CursorRepos\ecc-cursor`).
+- [x] **CURSOR_PLUGIN_ROOT** установлен: `$env:USERPROFILE\.cursor\plugins\local\ecc-cursor`.
 - [x] **CURSOR_PROJECT_DIR** установлен, равен корню workspace (но строчная буква
   диска `c:\...` против заглавной в cwd — сравнивать пути case-insensitive).
 - [x] **CLAUDE_PROJECT_DIR** Cursor выставляет сам (alias, то же значение).
@@ -69,3 +69,28 @@ conversation_id, cursor_version, generation_id, hook_event_name, input_tokens,
 loop_count, model, model_id, model_params, output_tokens, session_id, status,
 transcript_path, user_email, workspace_roots. preToolUse: + tool_input, tool_name,
 tool_use_id. platform win32, node v22.23.2 (из PATH, не sandbox).
+
+## Фаза 2 (ожидает ручной проверки)
+
+После `node scripts/cursor-plugin/install-local.js` и Developer: Reload Window:
+
+1. Customize -> Plugins -> `ecc-cursor` -> раздел Rules: видно **121** правило.
+   Открыть пару правил с globs (например `typescript-coding-style`,
+   `python-testing`): в шапке правила видны glob-паттерны, `alwaysApply: false`.
+2. Правила common (`common-security`, `common-testing`, ...): `alwaysApply: true`,
+   без globs — должны быть 10 штук.
+3. Проверка подключения по globs: открыть в редакторе подходящий файл
+   (например любой `*.ts` для `typescript-coding-style`) и спросить агента,
+   какие правила сейчас активны, либо убедиться через Agents/контекст, что
+   правило подтянулось. Повторить для несовпадающего типа файла (правило
+   подключаться не должно).
+4. Контекст-скиллы: `/ecc-context-dev`, `/ecc-context-research`,
+   `/ecc-context-review` вызываются явно и НЕ срабатывают сами
+   (disable-model-invocation).
+
+TODO(verify) фазы 2:
+
+- [ ] 121 правило видно в Customize -> Rules; у globs-правил отображаются паттерны.
+- [ ] Правило с globs реально подключается при открытии подходящего файла.
+- [ ] alwaysApply-правила common присутствуют в каждом чате.
+- [ ] Контекст-скиллы вызываются только явно.
