@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "phase": 1,
+  "comment": "Hook map for generate-hooks.js. Phase 1 carries probe entries only (4 events x 2 command forms) to verify hook mechanics on Windows. The full behavioral map (36+ ids) lands in phase 6; entries then move from 'probes' to 'entries' with hook-id -> Cursor event -> status per PLAN.md section 5.",
+  "commandForms": {
+    "A": {
+      "template": "node -e \"require(require('path').join(process.env.CURSOR_PLUGIN_ROOT,'hooks','{entry}'))\" {event}",
+      "note": "cwd- and shell-independent; event arrives as process.argv[1]. Favorite per PLAN.md section 5."
+    },
+    "B": {
+      "template": "node ./hooks/{entry} {event}",
+      "note": "relies on cwd = plugin folder; event arrives as process.argv[2]. Not suitable for stop/subagentStop (cwd = workspace root)."
+    }
+  },
+  "probes": [
+    {
+      "id": "probe:session-start",
+      "event": "sessionStart",
+      "entry": "probe.js"
+    },
+    {
+      "id": "probe:pre-tool-use",
+      "event": "preToolUse",
+      "entry": "probe.js",
+      "matcher": "*",
+      "todoVerify": "matcher field on plugin preToolUse entries (GAP-MAP: matchers are Shell|Read|Write|Grep|Delete|Task|MCP:<tool>); confirm '*' fires on manual test."
+    },
+    {
+      "id": "probe:stop",
+      "event": "stop",
+      "entry": "probe.js"
+    },
+    {
+      "id": "probe:subagent-stop",
+      "event": "subagentStop",
+      "entry": "probe.js"
+    }
+  ],
+  "entries": []
+}

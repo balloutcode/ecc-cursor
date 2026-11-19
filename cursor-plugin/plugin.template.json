@@ -1,0 +1,30 @@
+{
+  "name": "ecc-cursor",
+  "displayName": "ECC - Everything Claude Code, for Cursor",
+  "version": "0.1.0",
+  "description": "Production-ready agents, skills, commands, rules, hooks and memory workflows from ECC (Everything Claude Code), packaged as a native Cursor plugin.",
+  "author": {
+    "name": "balloutcode",
+    "url": "https://github.com/balloutcode"
+  },
+  "repository": "https://github.com/balloutcode/ecc-cursor",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "skills",
+    "commands",
+    "rules",
+    "hooks",
+    "tdd",
+    "code-review",
+    "workflows"
+  ],
+  "category": "developer-tools",
+  "logo": "assets/logo.svg",
+  "rules": "./rules/",
+  "agents": "./agents/",
+  "skills": "./skills/",
+  "commands": "./commands/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./mcp.json"
+}

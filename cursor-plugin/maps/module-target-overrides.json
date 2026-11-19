@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "comment": "Target overrides applied in OUR layer only. Upstream manifests (manifests/install-*.json) are never edited. See PLAN.md section 2.",
+  "overrides": {
+    "orchestration": {
+      "addTargets": ["cursor"],
+      "reason": "orch-pipeline and the /code-review -> /orch-review chain are core ECC workflow; excluding the module would break the graph (orch -> tdd-workflow, code-reviewer, rules/common). dmux-workflows inside this module stays excluded via exclusions.json."
+    }
+  }
+}
