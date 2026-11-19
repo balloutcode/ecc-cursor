@@ -95,10 +95,14 @@ function runTests() {
   }
 
   // 2. report counts match phase-1 expectations (PLAN.md section 11)
-  t('report counts: rules 121, agents 72, skills 322, commands 98+12=110', () => {
+  t('report counts: rules 121, agents 72, skills 322+3=325, commands 98+12=110', () => {
     assert.strictEqual(report.counts.rules, 121);
     assert.strictEqual(report.counts.agents, 72);
-    assert.strictEqual(report.counts.skills, 322);
+    assert.strictEqual(report.counts.skills, 325);
+    assert.deepStrictEqual(report.contextSkills, ['ecc-context-dev', 'ecc-context-research', 'ecc-context-review']);
+    assert.strictEqual(report.rules.total, 121);
+    assert.strictEqual(report.rules.withNativeFrontmatter, 39);
+    assert.strictEqual(report.rules.alwaysApplyTrue, 10);
     assert.strictEqual(report.counts.commands.upstream, 98);
     assert.strictEqual(report.counts.commands.overrides, 12);
     assert.strictEqual(report.counts.commands.total, 110);

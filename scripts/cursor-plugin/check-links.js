@@ -41,6 +41,59 @@ function tokenize(content) {
   return new Set(content.split(/[^a-z0-9-]+/i).filter(Boolean));
 }
 
+const SCRIPT_REF_RE = /(?:^|[\s"'`(=])((?:\.{1,2}\/)?scripts\/[\w@+.,~/-]+\.(?:js|cjs|mjs|py|sh))\b/gm;
+const SLASH_REF_RE = /(?:^|[\s`"(])\/([a-z][a-z0-9-]{1,40})\b/gm;
+// Rule references: upstream form rules/<ns>/<file>.md (resolves to the
+// flattened <ns>-<file> name) and built form rules/<ns>-<file>.mdc.
+// Lookbehind boundary: a preceding '/' is fine (../../rules/... links).
+const RULE_NS_REF_RE = /(?<![\w-])rules\/([\w-]+)\/([\w-]+)\.md\b/gm;
+const RULE_FLAT_REF_RE = /(?<![\w-])rules\/([\w-]+)\.mdc\b/gm;
+
+function scanTokenRefs(tokens, file, ctx) {
+  for (const name of ctx.repoAgents) {
+    if (tokens.has(name) && !ctx.builtAgents.has(name)) ctx.add('agents', name, file);
+  }
+  for (const name of ctx.repoSkills) {
+    if (tokens.has(name) && !ctx.builtSkills.has(name)) ctx.add('skills', name, file);
+  }
+  for (const name of ctx.repoCommands) {
+    if (tokens.has(name) && !ctx.builtCommands.has(name)) ctx.add('commands', name, file);
+  }
+}
+
+function scanPathRefs(content, file, ctx) {
+  let m;
+  SCRIPT_REF_RE.lastIndex = 0;
+  while ((m = SCRIPT_REF_RE.exec(content)) !== null) {
+    let ref = m[1];
+    if (ref.startsWith('./')) ref = ref.slice(2);
+    if (ref.startsWith('../')) continue;
+    if (!ctx.builtScripts.has(ref)) ctx.add('scripts', ref, file);
+  }
+
+  SLASH_REF_RE.lastIndex = 0;
+  while ((m = SLASH_REF_RE.exec(content)) !== null) {
+    const name = m[1];
+    if (ctx.repoCommands.has(name) && !ctx.builtCommands.has(name)) ctx.add('commands', `/${name}`, file);
+  }
+
+  RULE_NS_REF_RE.lastIndex = 0;
+  while ((m = RULE_NS_REF_RE.exec(content)) !== null) {
+    const flat = `${m[1]}-${m[2]}`;
+    if (!ctx.builtRules.has(flat)) ctx.add('rules', `rules/${m[1]}/${m[2]}.md`, file);
+  }
+  RULE_FLAT_REF_RE.lastIndex = 0;
+  while ((m = RULE_FLAT_REF_RE.exec(content)) !== null) {
+    if (!ctx.builtRules.has(m[1])) ctx.add('rules', `rules/${m[1]}.mdc`, file);
+  }
+}
+
+function scanMarkdownFile(file, ctx) {
+  const content = fs.readFileSync(file, 'utf8');
+  scanTokenRefs(tokenize(content), file, ctx);
+  scanPathRefs(content, file, ctx);
+}
+
 function checkLinks() {
   // Name spaces from the UPSTREAM repo (what a reference could mean)...
   const repoAgents = namesOf(path.join(REPO_ROOT, 'agents'), f => f.endsWith('.md') && f.slice(0, -3));
@@ -51,6 +104,7 @@ function checkLinks() {
   const builtAgents = namesOf(path.join(PLUGIN_ROOT, 'agents'), f => f.endsWith('.md') && f.slice(0, -3));
   const builtSkills = new Set(fs.readdirSync(path.join(PLUGIN_ROOT, 'skills'), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name));
   const builtCommands = namesOf(path.join(PLUGIN_ROOT, 'commands'), f => f.endsWith('.md') && f.slice(0, -3));
+  const builtRules = namesOf(path.join(PLUGIN_ROOT, 'rules'), f => f.endsWith('.mdc') && f.slice(0, -4));
   const builtScripts = new Set();
   const scriptsRoot = path.join(PLUGIN_ROOT, 'scripts');
   const walkScripts = d => {
@@ -63,44 +117,16 @@ function checkLinks() {
   };
   walkScripts(scriptsRoot);
 
-  const broken = { agents: new Map(), skills: new Map(), commands: new Map(), scripts: new Map() };
+  const broken = { agents: new Map(), skills: new Map(), commands: new Map(), rules: new Map(), scripts: new Map() };
   const add = (type, name, from) => {
     const rel = T.toPosix(path.relative(PLUGIN_ROOT, from));
     if (!broken[type].has(name)) broken[type].set(name, new Set());
     broken[type].get(name).add(rel);
   };
 
-  const scriptRefRe = /(?:^|[\s"'`(=])((?:\.{1,2}\/)?scripts\/[\w@+.,~/-]+\.(?:js|cjs|mjs|py|sh))\b/gm;
-  const slashRefRe = /(?:^|[\s`"(])\/([a-z][a-z0-9-]{1,40})\b/gm;
-
+  const scanCtx = { repoAgents, repoSkills, repoCommands, builtAgents, builtSkills, builtCommands, builtRules, builtScripts, add };
   for (const file of collectMarkdown(PLUGIN_ROOT)) {
-    const content = fs.readFileSync(file, 'utf8');
-    const tokens = tokenize(content);
-
-    for (const name of repoAgents) {
-      if (tokens.has(name) && !builtAgents.has(name)) add('agents', name, file);
-    }
-    for (const name of repoSkills) {
-      if (tokens.has(name) && !builtSkills.has(name)) add('skills', name, file);
-    }
-    for (const name of repoCommands) {
-      if (tokens.has(name) && !builtCommands.has(name)) add('commands', name, file);
-    }
-
-    let m;
-    scriptRefRe.lastIndex = 0;
-    while ((m = scriptRefRe.exec(content)) !== null) {
-      let ref = m[1];
-      if (ref.startsWith('./')) ref = ref.slice(2);
-      if (ref.startsWith('../')) continue;
-      if (!builtScripts.has(ref)) add('scripts', ref, file);
-    }
-
-    slashRefRe.lastIndex = 0;
-    while ((m = slashRefRe.exec(content)) !== null) {
-      const name = m[1];
-      if (repoCommands.has(name) && !builtCommands.has(name)) add('commands', `/${name}`, file);
-    }
+    scanMarkdownFile(file, scanCtx);
   }
 
   const summary = {};
@@ -126,7 +152,7 @@ if (require.main === module) {
       console.log(`    ${type}: ${name}  <- ${files.size} file(s): ${sample}${files.size > 2 ? ', ...' : ''}`);
     }
   };
-  for (const type of ['skills', 'agents', 'commands', 'scripts']) show(type, 8);
+  for (const type of ['skills', 'agents', 'commands', 'rules', 'scripts']) show(type, 8);
   console.log(`  total broken targets: ${total}`);
   if (failMode && total > 0) process.exit(1);
 }

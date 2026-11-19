@@ -36,8 +36,8 @@ Developer: Reload Window:
   `./hooks/probe.js` там не резолвится, молчаливый отказ (как предсказывал PLAN).
   Вывод: форма B непригодна для stop/subagentStop -> выбрана форма A.
 - [x] **cwd stop/subagentStop = корень workspace** — подтверждено (stop:
-  `C:\Users\alext\Documents\CursorRepos\ecc-cursor`).
-- [x] **CURSOR_PLUGIN_ROOT** установлен: `C:\Users\alext\.cursor\plugins\local\ecc-cursor`.
+  `$env:USERPROFILE\Documents\CursorRepos\ecc-cursor`).
+- [x] **CURSOR_PLUGIN_ROOT** установлен: `$env:USERPROFILE\.cursor\plugins\local\ecc-cursor`.
 - [x] **CURSOR_PROJECT_DIR** установлен, равен корню workspace (но строчная буква
   диска `c:\...` против заглавной в cwd — сравнивать пути case-insensitive).
 - [x] **CLAUDE_PROJECT_DIR** Cursor выставляет сам (alias, то же значение).
@@ -69,3 +69,36 @@ conversation_id, cursor_version, generation_id, hook_event_name, input_tokens,
 loop_count, model, model_id, model_params, output_tokens, session_id, status,
 transcript_path, user_email, workspace_roots. preToolUse: + tool_input, tool_name,
 tool_use_id. platform win32, node v22.23.2 (из PATH, не sandbox).
+
+## Фаза 2
+
+Проверка: `node scripts/cursor-plugin/install-local.js`, Developer: Reload Window,
+локальная установка `~/.cursor/plugins/local/ecc-cursor` (20.11.2026).
+
+Customize -> Plugins -> `ecc-cursor`:
+
+- [x] **Rules: 121** — OK.
+- [x] **Skills: 325**, в т.ч. `ecc-context-dev`, `ecc-context-research`,
+      `ecc-context-review` — OK.
+- [x] **Hooks: 4** события (форма A, фаза 1) — OK.
+- [x] **MCP chrome-devtools** — работает — OK.
+
+Правила в контексте агента:
+
+- [x] **alwaysApply: true** — все **10** common-правил (`common-agents`,
+      `common-code-review`, `common-coding-style`, `common-development-workflow`,
+      `common-git-workflow`, `common-hooks`, `common-patterns`,
+      `common-performance`, `common-security`, `common-testing`) видны в
+      контексте агента — OK.
+- [ ] **globs** — при открытом файле `*.ts` (проверка: `tmp-rule-check.ts` в
+      корне репозитория) правило `typescript-coding-style` **не** попало в
+      контекст агента по запросу «какие правила активны». Шапка правила в
+      Customize показывает globs; подключение по glob в чате не подтверждено.
+- [x] Контекст-скиллы вызываются только явно (`disable-model-invocation`) —
+      OK по Customize; автовызов не проверялся отдельно.
+
+TODO(verify):
+
+- [ ] **globs в контексте агента** — повторить при **чтении/правке** `.ts`-файла
+      агентом (не только «файл открыт у пользователя»); зафиксировать в фазе 4
+      вместе с замером `paths:` у языковых скиллов.
