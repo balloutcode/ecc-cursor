@@ -70,27 +70,35 @@ loop_count, model, model_id, model_params, output_tokens, session_id, status,
 transcript_path, user_email, workspace_roots. preToolUse: + tool_input, tool_name,
 tool_use_id. platform win32, node v22.23.2 (из PATH, не sandbox).
 
-## Фаза 2 (ожидает ручной проверки)
+## Фаза 2
 
-После `node scripts/cursor-plugin/install-local.js` и Developer: Reload Window:
+Проверка: `node scripts/cursor-plugin/install-local.js`, Developer: Reload Window,
+локальная установка `~/.cursor/plugins/local/ecc-cursor` (20.11.2026).
 
-1. Customize -> Plugins -> `ecc-cursor` -> раздел Rules: видно **121** правило.
-   Открыть пару правил с globs (например `typescript-coding-style`,
-   `python-testing`): в шапке правила видны glob-паттерны, `alwaysApply: false`.
-2. Правила common (`common-security`, `common-testing`, ...): `alwaysApply: true`,
-   без globs — должны быть 10 штук.
-3. Проверка подключения по globs: открыть в редакторе подходящий файл
-   (например любой `*.ts` для `typescript-coding-style`) и спросить агента,
-   какие правила сейчас активны, либо убедиться через Agents/контекст, что
-   правило подтянулось. Повторить для несовпадающего типа файла (правило
-   подключаться не должно).
-4. Контекст-скиллы: `/ecc-context-dev`, `/ecc-context-research`,
-   `/ecc-context-review` вызываются явно и НЕ срабатывают сами
-   (disable-model-invocation).
+Customize -> Plugins -> `ecc-cursor`:
 
-TODO(verify) фазы 2:
+- [x] **Rules: 121** — OK.
+- [x] **Skills: 325**, в т.ч. `ecc-context-dev`, `ecc-context-research`,
+      `ecc-context-review` — OK.
+- [x] **Hooks: 4** события (форма A, фаза 1) — OK.
+- [x] **MCP chrome-devtools** — работает — OK.
 
-- [ ] 121 правило видно в Customize -> Rules; у globs-правил отображаются паттерны.
-- [ ] Правило с globs реально подключается при открытии подходящего файла.
-- [ ] alwaysApply-правила common присутствуют в каждом чате.
-- [ ] Контекст-скиллы вызываются только явно.
+Правила в контексте агента:
+
+- [x] **alwaysApply: true** — все **10** common-правил (`common-agents`,
+      `common-code-review`, `common-coding-style`, `common-development-workflow`,
+      `common-git-workflow`, `common-hooks`, `common-patterns`,
+      `common-performance`, `common-security`, `common-testing`) видны в
+      контексте агента — OK.
+- [ ] **globs** — при открытом файле `*.ts` (проверка: `tmp-rule-check.ts` в
+      корне репозитория) правило `typescript-coding-style` **не** попало в
+      контекст агента по запросу «какие правила активны». Шапка правила в
+      Customize показывает globs; подключение по glob в чате не подтверждено.
+- [x] Контекст-скиллы вызываются только явно (`disable-model-invocation`) —
+      OK по Customize; автовызов не проверялся отдельно.
+
+TODO(verify):
+
+- [ ] **globs в контексте агента** — повторить при **чтении/правке** `.ts`-файла
+      агентом (не только «файл открыт у пользователя»); зафиксировать в фазе 4
+      вместе с замером `paths:` у языковых скиллов.
