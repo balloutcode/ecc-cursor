@@ -23,7 +23,7 @@
       "event": "preToolUse",
       "entry": "probe.js",
       "matcher": "*",
-      "todoVerify": "matcher field on plugin preToolUse entries (GAP-MAP: matchers are Shell|Read|Write|Grep|Delete|Task|MCP:<tool>); confirm '*' fires on manual test."
+      "verified": "19.11.2026 probe.log: matcher '*' fires on preToolUse (tool_name Read). Matchers per GAP-MAP: Shell|Read|Write|Grep|Delete|Task|MCP:<tool>."
     },
     {
       "id": "probe:stop",

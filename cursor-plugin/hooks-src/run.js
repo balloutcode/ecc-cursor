@@ -27,6 +27,17 @@ function resolveEvent(argv) {
 }
 
 /**
+ * Cursor delivers workspace_roots entries like "/c:/Users/..." (leading
+ * slash before the drive letter, probe.log 19.11.2026) - not a valid win32
+ * path for fs. Normalize to "c:/Users/..."; POSIX paths pass through.
+ */
+function normalizeWorkspaceRoot(root) {
+  if (typeof root !== 'string' || !root) return root;
+  const match = root.match(/^\/([a-zA-Z]:\/.*)$/);
+  return match ? match[1] : root;
+}
+
+/**
  * Project dir chain (PLAN.md section 5): CURSOR_PROJECT_DIR -> first
  * workspace_roots entry from the hook payload -> process.cwd(). For
  * stop/subagentStop the cwd IS the workspace root, so the last branch is
@@ -37,7 +48,7 @@ function resolveProjectDir(env, payload, cwd) {
     return env.CURSOR_PROJECT_DIR;
   }
   if (payload && Array.isArray(payload.workspace_roots) && payload.workspace_roots.length > 0) {
-    const first = payload.workspace_roots[0];
+    const first = normalizeWorkspaceRoot(payload.workspace_roots[0]);
     if (typeof first === 'string' && first) return first;
   }
   return cwd || process.cwd();
@@ -121,4 +132,4 @@ if (require.main === module || !requiredFromJs) {
   main();
 }
 
-module.exports = { resolveEvent, resolveProjectDir, setupEnv, parsePayload };
+module.exports = { resolveEvent, resolveProjectDir, normalizeWorkspaceRoot, setupEnv, parsePayload };

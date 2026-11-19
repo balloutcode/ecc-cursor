@@ -191,6 +191,7 @@ function runTests() {
     assert.strictEqual(run.resolveEvent(['node', 'C:\\p\\hooks\\run.js', 'stop']), 'stop'); // form B
     assert.strictEqual(run.resolveProjectDir({ CURSOR_PROJECT_DIR: 'X:\\proj' }, null, 'C:\\cwd'), 'X:\\proj');
     assert.strictEqual(run.resolveProjectDir({}, { workspace_roots: ['Y:\\ws'] }, 'C:\\cwd'), 'Y:\\ws');
+    assert.strictEqual(run.resolveProjectDir({}, { workspace_roots: ['/c:/Users/u/ws'] }, 'C:\\cwd'), 'c:/Users/u/ws');
     assert.strictEqual(run.resolveProjectDir({}, null, 'C:\\cwd'), 'C:\\cwd');
 
     const formB = runNode([RUN_JS, 'preToolUse'], { input: '{}' });
