@@ -102,3 +102,36 @@ TODO(verify):
 - [ ] **globs в контексте агента** — повторить при **чтении/правке** `.ts`-файла
       агентом (не только «файл открыт у пользователя»); зафиксировать в фазе 4
       вместе с замером `paths:` у языковых скиллов.
+
+## Фаза 3 (ожидает ручной проверки)
+
+Чек-лист после `node scripts/cursor-plugin/install-local.js` и
+Developer: Reload Window:
+
+1. Customize -> Subagents: **72** субагента, все с именами `ecc-*`
+   (`ecc-planner`, `ecc-code-reviewer`, ...). Ни одного bare-имени
+   (`planner`, `code-reviewer`) и ни одного дубликата.
+2. У read-only агента (`ecc-planner`, `ecc-architect`, `ecc-code-explorer` —
+   всего 11 по report.json `agents.readonlyAgents`) в карточке/деталях виден
+   признак `readonly` (TODO(verify): как именно Customize отображает readonly
+   и model inherit — недокументировано).
+3. У любого агента в теле виден раздел `## Recommended tools` с Cursor-
+   именами инструментов (Bash -> Shell); у `ecc-docs-lookup` и
+   `ecc-gan-evaluator` — блок про MCP-сервер.
+4. Вызов из чата: набрать `/ecc-planner составь план по <маленькой задаче>` —
+   делегирование уходит именно в сабагент `ecc-planner` (в карточке задачи
+   видно имя сабагента), ответ возвращается в родителя. Альтернатива:
+   «Use the ecc-planner subagent to ...».
+5. Делегирование по описанию без явного имени: «спланируй сложную фичу»
+   должно само делегировать в `ecc-planner` (description перенесён с
+   "Use PROACTIVELY").
+
+Вопросы, на которые должна ответить проверка (TODO(verify)):
+
+- [ ] Отображение `readonly: true` и `model: inherit` в Customize -> Subagents.
+- [ ] Вызов `/ecc-planner` из чата делегирует в нужный сабагент (видимое имя
+      в карточке задачи = ecc-planner).
+- [ ] Автоделегирование по description (без явного имени) работает с 72
+      кастомными сабагентами (латентность выбора).
+- [ ] Read-only сабагент реально не может править файлы (попросить
+      `ecc-planner` изменить файл — ожидается отказ/ограничение).
