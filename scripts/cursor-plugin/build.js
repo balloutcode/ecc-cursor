@@ -2,14 +2,17 @@
 'use strict';
 
 /**
- * ecc-cursor plugin builder (phase 2: rules + contexts).
+ * ecc-cursor plugin builder (phase 3: agents).
  *
  * Reads upstream ECC sources (never modifies them), applies the transform
- * set (rules: paths->globs + native .cursor/rules copies + link fixes;
- * agents: `model: inherit`; contexts: ecc-context-* skills; markdown:
+ * set (rules: paths->globs + native .cursor/rules copies + link fixes +
+ * agent refs -> ecc-*; agents: agent-emit-cursor.js - name ecc-<id>,
+ * model inherit, readonly for the 11 strict tool sets, tools list restated
+ * in the body; contexts: ecc-context-* skills; markdown:
  * rules/<ns>/<f>.md -> rules/<ns>-<f>.mdc references), and writes a ready
  * Cursor plugin to build/cursor-plugin/ecc-cursor/ plus a build report to
- * build/cursor-plugin/report.json.
+ * build/cursor-plugin/report.json. Also regenerates
+ * cursor-plugin/maps/agent-names.json (deterministic; phases 4-5 consume it).
  *
  * Composition: `full` install profile (36 modules, manifests/install-*.json)
  * minus cursor-plugin/maps/exclusions.json, with target overrides from
@@ -31,6 +34,10 @@ const { builtinModules } = require('module');
 
 const T = require('../lib/cursor-plugin/transforms');
 const R = require('../lib/cursor-plugin/rules');
+const E = require('../lib/cursor-plugin/agent-emit-cursor');
+const N = require('../lib/cursor-plugin/agent-names');
+const { createAgentRefTransform } = require('../lib/cursor-plugin/agent-refs');
+const { parseAllAgents } = require('../lib/agent-ir');
 const { generateHooksJson, loadHookMap, serialize } = require('./generate-hooks');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -91,13 +98,13 @@ function resolveComposition() {
 // ---------------------------------------------------------------------------
 // collectors (each returns ops + report data)
 
-function collectRules(warnings) {
+function collectRules(warnings, agentRefs) {
   const ops = [];
   const skipped = [];
   const rulesRoot = path.join(REPO_ROOT, 'rules');
   const nativeRules = R.listNativeRules(REPO_ROOT);
   const usedNative = new Set();
-  const stats = { total: 0, native: 0, upstream: 0, alwaysApplyTrue: 0, withGlobs: 0, withoutSourceFrontmatter: 0 };
+  const stats = { total: 0, native: 0, upstream: 0, alwaysApplyTrue: 0, withGlobs: 0, withoutSourceFrontmatter: 0, renamedAgentRefs: 0 };
   const seen = new Map(); // destRel -> source path (collision guard)
   const entries = fs.readdirSync(rulesRoot, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
@@ -124,7 +131,7 @@ function collectRules(warnings) {
       const nativePath = nativeRules.get(flatName) || null;
       const content = fs.readFileSync(srcAbs, 'utf8');
       const nativeContent = nativePath ? fs.readFileSync(nativePath, 'utf8') : null;
-      const rendered = R.transformRule({ namespace: entry.name, relFile: rel, content, nativeContent });
+      const rendered = R.transformRule({ namespace: entry.name, relFile: rel, content, nativeContent, agentRefs });
 
       stats.total += 1;
       stats[rendered.meta.source] += 1;
@@ -132,6 +139,7 @@ function collectRules(warnings) {
       if (rendered.meta.globs) stats.withGlobs += 1;
       if (nativePath) usedNative.add(flatName);
       if (!nativePath && rendered.meta.hadFrontmatter === false) stats.withoutSourceFrontmatter += 1;
+      stats.renamedAgentRefs += rendered.meta.agentRefReplacements || 0;
 
       ops.push(createOp(srcAbs, destRel, () => rendered.content));
     }
@@ -143,19 +151,22 @@ function collectRules(warnings) {
   return { ops, skipped, stats };
 }
 
-function collectAgents(warnings, ruleRefs) {
-  const ops = [];
-  const agentsRoot = path.join(REPO_ROOT, 'agents');
-  const modelStats = {};
-  for (const f of fs.readdirSync(agentsRoot).filter(f => f.endsWith('.md')).sort()) {
-    const content = fs.readFileSync(path.join(agentsRoot, f), 'utf8');
-    const fm = T.splitFrontmatter(content).frontmatter;
-    const model = T.getFrontmatterField(fm, 'model');
-    modelStats[model || '(none)'] = (modelStats[model || '(none)'] || 0) + 1;
-    if (!model) warnings.push(`agents: ${f} has no model field (left as-is)`);
-    ops.push(createOp(path.join(agentsRoot, f), path.join('agents', f), c => ruleRefs(T.agentModelInherit(c))));
-  }
-  return { ops, modelStats };
+function collectAgents(warnings, ruleRefs, agentRefs, nameMap) {
+  const irs = parseAllAgents(path.join(REPO_ROOT, 'agents'));
+  let renamedRefs = 0;
+  const transformBody = body => {
+    const renamed = agentRefs(ruleRefs(body));
+    renamedRefs += renamed.replacements;
+    return renamed.content;
+  };
+  const { results, warnings: emitWarnings, stats } = E.emitAllCursorAgents(irs, { nameMap, transformBody });
+  warnings.push(...emitWarnings);
+  const ops = results.map(r => createOp(
+    path.join(REPO_ROOT, 'agents', `${r.id}.md`),
+    path.join('agents', `${r.name}.md`),
+    () => r.markdown
+  ));
+  return { ops, stats: { ...stats, renamedRefs } };
 }
 
 function collectSkills(skillSet, exclusions, ruleRefs) {
@@ -342,9 +353,15 @@ function build() {
   const warnings = [];
   const skipped = [];
 
+  // phase 3: agent-names.json (deterministic regeneration; `changed` flags
+  // upstream drift to be reviewed and committed, PLAN.md section 10)
+  const nameMapResult = N.writeAgentNameMap(REPO_ROOT);
+  const nameMap = nameMapResult.agents;
+  const agentRefs = createAgentRefTransform(nameMap);
+
   const ruleRefs = R.createRuleRefTransform(R.listRuleNamespaces(REPO_ROOT));
-  const rules = collectRules(warnings);
-  const agents = collectAgents(warnings, ruleRefs);
+  const rules = collectRules(warnings, agentRefs);
+  const agents = collectAgents(warnings, ruleRefs, agentRefs, nameMap);
   const skills = collectSkills(composition.skillSet, exclusions, ruleRefs);
   const contexts = collectContexts();
   const commands = collectCommands(ruleRefs);
@@ -421,7 +438,7 @@ function build() {
     .sort();
 
   const report = {
-    phase: 2,
+    phase: 3,
     profile: 'full',
     modules: {
       included: composition.fullModules,
@@ -445,9 +462,18 @@ function build() {
       alwaysApplyTrue: rules.stats.alwaysApplyTrue,
       withGlobs: rules.stats.withGlobs,
       withoutSourceFrontmatter: rules.stats.withoutSourceFrontmatter,
+      renamedAgentRefs: rules.stats.renamedAgentRefs,
     },
     contextSkills: contexts.ids.map(id => `ecc-context-${id}`).sort(),
-    agentModelStats: agents.modelStats,
+    agents: {
+      total: agents.stats.total,
+      readonly: agents.stats.readonly,
+      readonlyAgents: agents.stats.readonlyAgents,
+      mcpServers: agents.stats.mcpServers,
+      modelTiers: agents.stats.modelTiers,
+      renamedRefs: agents.stats.renamedRefs,
+      nameMapChanged: nameMapResult.changed,
+    },
     excluded: {
       skills: Object.fromEntries(Object.entries(exclusions.skills).sort((a, b) => a[0].localeCompare(b[0]))),
       platformDirsPresent,
@@ -471,9 +497,9 @@ function build() {
 if (require.main === module) {
   const report = build();
   const c = report.counts;
-  console.log('ecc-cursor build OK (phase 2: rules + contexts)');
-  console.log(`  rules:    ${c.rules} (native frontmatter: ${report.rules.withNativeFrontmatter}/${report.rules.total}, alwaysApply true: ${report.rules.alwaysApplyTrue})`);
-  console.log(`  agents:   ${c.agents}`);
+  console.log('ecc-cursor build OK (phase 3: agents)');
+  console.log(`  rules:    ${c.rules} (native frontmatter: ${report.rules.withNativeFrontmatter}/${report.rules.total}, alwaysApply true: ${report.rules.alwaysApplyTrue}, agent refs renamed: ${report.rules.renamedAgentRefs})`);
+  console.log(`  agents:   ${c.agents} (readonly: ${report.agents.readonly}, agent refs renamed: ${report.agents.renamedRefs}, name map ${report.agents.nameMapChanged ? 'UPDATED' : 'unchanged'})`);
   console.log(`  skills:   ${c.skills} (${report.contextSkills.length} context skills)`);
   console.log(`  commands: ${c.commands.total} (upstream ${c.commands.upstream} + overrides ${c.commands.overrides})`);
   console.log(`  hooks:    ${c.hooks.events} events, ${c.hooks.entries} entries`);
