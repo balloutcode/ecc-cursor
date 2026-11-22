@@ -8,7 +8,7 @@ directly; change the sources in `balloutcode/ecc-cursor` and rebuild.
 ## Contents
 
 - 121 rules (language and common coding standards)
-- 72 agents (planner, code-reviewer, tdd-guide, security-reviewer, ...)
+- 72 agents (ecc-planner, ecc-code-reviewer, ecc-tdd-guide, ecc-security-reviewer, ...)
 - 322 skills (workflow and domain knowledge)
 - 110 commands (98 upstream + 12 legacy shims pointing at canonical skills)
 - Plugin hooks (session lifecycle and probes; behavioral hooks land in phase 6)

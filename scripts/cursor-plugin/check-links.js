@@ -2,18 +2,25 @@
 'use strict';
 
 /**
- * Link integrity checker for the ecc-cursor build (phase 1: warn mode).
+ * Link integrity checker for the ecc-cursor build (phase 3: warn mode).
  *
  * Scans every markdown component of the built plugin and reports references
  * to agents / skills / commands / rules / scripts that exist in the upstream
  * repo but are MISSING from the build (broken by exclusion or not yet
  * transformed). Prints a baseline summary by link type; exit code is always
  * 0 unless --fail is passed (fail mode arrives with phase 5).
+ *
+ * Agent references resolve through cursor-plugin/maps/agent-names.json
+ * (phase 3): built agents are `ecc-<id>`, so a bare token resolves iff its
+ * mapped ecc-* name is built (bare names survive in skills/commands until
+ * phases 4-5), and an `ecc-<id>` token resolves iff that exact agent is
+ * built (catches typos in renamed references).
  */
 
 const fs = require('fs');
 const path = require('path');
 const T = require('../lib/cursor-plugin/transforms');
+const { loadAgentNameMap } = require('../lib/cursor-plugin/agent-names');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const PLUGIN_ROOT = path.join(REPO_ROOT, 'build', 'cursor-plugin', 'ecc-cursor');
@@ -51,7 +58,12 @@ const RULE_FLAT_REF_RE = /(?<![\w-])rules\/([\w-]+)\.mdc\b/gm;
 
 function scanTokenRefs(tokens, file, ctx) {
   for (const name of ctx.repoAgents) {
-    if (tokens.has(name) && !ctx.builtAgents.has(name)) ctx.add('agents', name, file);
+    // bare reference (pre-rename form): resolves iff the mapped ecc-* agent is built
+    if (tokens.has(name) && !ctx.builtAgents.has(ctx.agentNameMap[name])) ctx.add('agents', name, file);
+  }
+  for (const eccName of ctx.eccAgentNames) {
+    // renamed reference: resolves iff that exact agent is built
+    if (tokens.has(eccName) && !ctx.builtAgents.has(eccName)) ctx.add('agents', eccName, file);
   }
   for (const name of ctx.repoSkills) {
     if (tokens.has(name) && !ctx.builtSkills.has(name)) ctx.add('skills', name, file);
@@ -124,7 +136,9 @@ function checkLinks() {
     broken[type].get(name).add(rel);
   };
 
-  const scanCtx = { repoAgents, repoSkills, repoCommands, builtAgents, builtSkills, builtCommands, builtRules, builtScripts, add };
+  const agentNameMap = loadAgentNameMap(REPO_ROOT);
+  const eccAgentNames = new Set(Object.values(agentNameMap));
+  const scanCtx = { repoAgents, repoSkills, repoCommands, builtAgents, builtSkills, builtCommands, builtRules, builtScripts, agentNameMap, eccAgentNames, add };
   for (const file of collectMarkdown(PLUGIN_ROOT)) {
     scanMarkdownFile(file, scanCtx);
   }

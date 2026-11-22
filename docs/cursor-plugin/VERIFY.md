@@ -102,3 +102,32 @@ TODO(verify):
 - [ ] **globs в контексте агента** — повторить при **чтении/правке** `.ts`-файла
       агентом (не только «файл открыт у пользователя»); зафиксировать в фазе 4
       вместе с замером `paths:` у языковых скиллов.
+
+## Фаза 3
+
+Проверка: `node scripts/cursor-plugin/install-local.js`, Developer: Reload Window,
+локальная установка `~/.cursor/plugins/local/ecc-cursor` (22.11.2026).
+
+Customize -> Subagents / чат:
+
+- [x] **72 субагента `ecc-*`** — OK (bare-имён и дубликатов нет).
+- [x] **`/ecc-planner`** — вызывает сабагента `ecc-planner`, план возвращается
+      в родительский чат — OK (Done-when фазы 3 по PLAN.md).
+
+Чек-лист (расширенный; пункты без отметки не проверялись в этой сессии):
+
+1. [x] Customize -> Subagents: 72, имена `ecc-*`.
+2. [ ] У read-only агента признак `readonly` в Customize (TODO(verify): как
+      отображаются `readonly` и `model: inherit`).
+3. [ ] Раздел `## Recommended tools` и MCP-блоки у `ecc-docs-lookup` /
+      `ecc-gan-evaluator` в UI (достаточно сборки/тестов; UI не смотрели).
+4. [x] Явный вызов `/ecc-planner` — делегирование и ответ.
+5. [ ] Автоделегирование по description без явного имени.
+6. [ ] Read-only: `ecc-planner` не правит файлы при явной просьбе.
+
+TODO(verify):
+
+- [ ] **readonly / model inherit в Customize** — отложено.
+- [x] **Вызов `/ecc-planner`** — подтверждено.
+- [ ] **Автоделегирование** с 72 сабагентами — отложено.
+- [ ] **readonly на запись файлов** — отложено.

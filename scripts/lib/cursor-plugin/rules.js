@@ -106,28 +106,40 @@ function transformRuleBody(body, namespace) {
 /**
  * Build a Cursor-format rule document from an upstream rule.
  * Returns { content, meta } where meta carries report data.
+ *
+ * `agentRefs` (phase 3): optional transform from agent-refs.js applied to the
+ * rule body (native copies included - the native common-agents copy uses bare
+ * names) after the phase-2 link fixes. Bare agent references are renamed to
+ * the plugin's ecc-* agents; the replacement count lands in meta.
  */
-function transformRule({ namespace, relFile, content, nativeContent }) {
+function transformRule({ namespace, relFile, content, nativeContent, agentRefs }) {
+  const applyAgentRefs = body => {
+    if (!agentRefs) return { body, agentRefReplacements: 0 };
+    const r = agentRefs(body);
+    return { body: r.content, agentRefReplacements: r.replacements };
+  };
+
   if (nativeContent !== null && nativeContent !== undefined) {
     const parts = T.splitFrontmatter(nativeContent);
     const frontmatter = parts.frontmatter || '';
-    const body = transformRuleBody(parts.frontmatter ? parts.body.replace(/^\r?\n/, '') : nativeContent, namespace);
+    const renamed = applyAgentRefs(transformRuleBody(parts.frontmatter ? parts.body.replace(/^\r?\n/, '') : nativeContent, namespace));
     const alwaysApply = T.getFrontmatterField(frontmatter, 'alwaysApply') === 'true';
     return {
-      content: `---\n${frontmatter}\n---\n${body}`,
+      content: `---\n${frontmatter}\n---\n${renamed.body}`,
       meta: {
         source: 'native',
         description: T.getFrontmatterField(frontmatter, 'description'),
         alwaysApply,
         globs: parsePathsList(frontmatter.replace(/^globs:/m, 'paths:')).length || null,
+        agentRefReplacements: renamed.agentRefReplacements,
       },
     };
   }
 
   const parts = T.splitFrontmatter(content);
   const globs = parsePathsList(parts.frontmatter);
-  const body = transformRuleBody(parts.frontmatter ? parts.body.replace(/^\r?\n/, '') : content, namespace);
-  const h1 = extractH1(body);
+  const renamed = applyAgentRefs(transformRuleBody(parts.frontmatter ? parts.body.replace(/^\r?\n/, '') : content, namespace));
+  const h1 = extractH1(renamed.body);
   const description = h1 || `ECC ${namespace} rules (${relFile.replace(/\.md$/, '')})`;
   // PLAN.md section 2: alwaysApply true for the 10 common rules (as in
   // .cursor/rules); false whenever globs are present.
@@ -142,13 +154,14 @@ function transformRule({ namespace, relFile, content, nativeContent }) {
   lines.push('---', '');
 
   return {
-    content: `${lines.join('\n')}${body}`,
+    content: `${lines.join('\n')}${renamed.body}`,
     meta: {
       source: 'upstream',
       description,
       alwaysApply,
       globs: globs.length,
       hadFrontmatter: Boolean(parts.frontmatter),
+      agentRefReplacements: renamed.agentRefReplacements,
     },
   };
 }

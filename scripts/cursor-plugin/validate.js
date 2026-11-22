@@ -83,10 +83,25 @@ function validateAgents() {
       fail(`agent without frontmatter: ${rel}`);
       continue;
     }
-    if (!T.getFrontmatterField(fm, 'name')) fail(`agent without name: ${rel}`);
+    const name = T.getFrontmatterField(fm, 'name');
+    if (!name) fail(`agent without name: ${rel}`);
+    // phase 3: plugin agents are ecc-<id>; file name must equal the agent name
+    const fileBase = path.basename(file, '.md');
+    if (name && name !== fileBase) fail(`agent name '${name}' != filename '${fileBase}': ${rel}`);
+    if (name && !name.startsWith('ecc-')) fail(`agent name without ecc- prefix: ${rel}`);
     if (!T.getFrontmatterField(fm, 'description')) fail(`agent without description: ${rel}`);
     if (T.hasForbiddenModel(content)) {
       fail(`agent with Claude model id: ${rel} (must be 'model: inherit')`);
+    }
+    const model = T.getFrontmatterField(fm, 'model');
+    if (model !== 'inherit') fail(`agent model must be 'inherit': ${rel}`);
+    // Cursor subagent frontmatter allowlist (cursor.com/docs/subagents):
+    // name, description, model, readonly, is_background
+    if (/^tools:/m.test(fm)) fail(`agent still has a tools: allowlist (unsupported in Cursor): ${rel}`);
+    if (/^color:/m.test(fm)) fail(`agent still has color: (Claude-only): ${rel}`);
+    const readonly = T.getFrontmatterField(fm, 'readonly');
+    if (readonly !== null && readonly !== 'true' && readonly !== 'false') {
+      fail(`agent readonly must be true/false: ${rel}`);
     }
   }
   return count;
