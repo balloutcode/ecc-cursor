@@ -1,0 +1,261 @@
+{
+  "version": 1,
+  "comment": "Phase-4 path map for the skill transform (scripts/lib/cursor-plugin/skills.js). Ordered rewrite rules for Claude paths in skill markdown: first match per scan position wins (earlier rules consume text before later ones see it). 'match' = literal, 'regex' = JS regex source (global). builtSkillsOnly: the $1 skill name must be in the build. examples: one fixture per rule, asserted by tests/cursor-plugin/skills.test.js. skillOverrides: per-skill literal rewrites applied BEFORE the global rules. claudeAllowlist: skills whose remaining .claude/ lines are intentional (Claude-side subject or shipped-script-verbatim paths); matching lines skip path/tool rules, and the test fails on any .claude/ line outside this list.",
+  "rules": [
+    {
+      "id": "plugin-root-var",
+      "match": "${CLAUDE_PLUGIN_ROOT}",
+      "replace": "$ECC_PLUGIN_ROOT",
+      "note": "Plugin scripts receive ECC_PLUGIN_ROOT from the hook runtime (PLAN.md section 5). Text mentions resolve to the installed plugin root.",
+      "example": { "in": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/x.js\"", "out": "node \"$ECC_PLUGIN_ROOT/scripts/x.js\"" }
+    },
+    {
+      "id": "learned-skills",
+      "match": "~/.claude/skills/learned",
+      "replace": "<ECC_AGENT_DATA_HOME>/skills/learned",
+      "note": "PLAN.md section 8; mirror to ~/.cursor/skills/learned with ecc-learned- prefix is phase 7.",
+      "example": { "in": "save to `~/.claude/skills/learned/`", "out": "save to `<ECC_AGENT_DATA_HOME>/skills/learned/`" }
+    },
+    {
+      "id": "session-data",
+      "match": "~/.claude/session-data",
+      "replace": "<ECC_AGENT_DATA_HOME>/session-data",
+      "note": "PLAN.md section 8.",
+      "example": { "in": "`~/.claude/session-data/x.json`", "out": "`<ECC_AGENT_DATA_HOME>/session-data/x.json`" }
+    },
+    {
+      "id": "metrics",
+      "match": "~/.claude/metrics",
+      "replace": "<ECC_AGENT_DATA_HOME>/metrics",
+      "note": "cost-tracker data (costs.jsonl, cost-snapshots) lives under the ECC agent data home on Cursor.",
+      "example": { "in": "`~/.claude/metrics/costs.jsonl`", "out": "`<ECC_AGENT_DATA_HOME>/metrics/costs.jsonl`" }
+    },
+    {
+      "id": "user-settings",
+      "match": "~/.claude/settings.json",
+      "replace": "~/.cursor/ecc/setup.json",
+      "note": "Same mapping as the phase-2 rule transform: ECC hook configuration on Cursor lives in ~/.cursor/ecc/setup.json.",
+      "example": { "in": "add to `~/.claude/settings.json`", "out": "add to `~/.cursor/ecc/setup.json`" }
+    },
+    {
+      "id": "built-skill-path",
+      "regex": "~/\\.claude/skills/([a-z0-9-]+)",
+      "replace": "$ECC_PLUGIN_ROOT/skills/$1",
+      "builtSkillsOnly": true,
+      "note": "References to an installed ECC skill's own files (scripts, hooks) resolve inside the installed plugin. Names not in the build fall through to user-skills-dir.",
+      "example": { "in": "bash ~/.claude/skills/my-skill/scripts/scan.sh", "out": "bash $ECC_PLUGIN_ROOT/skills/my-skill/scripts/scan.sh" }
+    },
+    {
+      "id": "user-rule-file",
+      "regex": "~/\\.claude/rules/([\\w-]+)/([\\w-]+)\\.md(?![\\w-])",
+      "replace": "$ECC_PLUGIN_ROOT/rules/$1-$2.mdc",
+      "note": "Installed ECC rules are the plugin's flattened .mdc files (phase-2 naming).",
+      "example": { "in": "uv run python -m scripts.run ~/.claude/rules/common/testing.md", "out": "uv run python -m scripts.run $ECC_PLUGIN_ROOT/rules/common-testing.mdc" }
+    },
+    {
+      "id": "user-agents-backtick",
+      "match": "`~/.claude/agents/",
+      "replace": "the plugin's `agents/",
+      "note": "Backticked glob forms like `~/.claude/agents/**/*.md` become the plugin's `agents/**/*.md`.",
+      "example": { "in": "read `~/.claude/agents/**/*.md` files", "out": "read the plugin's `agents/**/*.md` files" }
+    },
+    {
+      "id": "user-agents-dir",
+      "match": "~/.claude/agents/",
+      "replace": "the plugin's agents/ directory",
+      "note": "Bare form (same replacement text as the phase-2 rule transform).",
+      "example": { "in": "files in ~/.claude/agents/ are user agents", "out": "files in the plugin's agents/ directory are user agents" }
+    },
+    {
+      "id": "user-skills-dir",
+      "match": "~/.claude/skills",
+      "replace": "~/.cursor/skills",
+      "note": "Generic user skill catalog: Cursor reads ~/.cursor/skills natively.",
+      "example": { "in": "ls ~/.claude/skills", "out": "ls ~/.cursor/skills" }
+    },
+    {
+      "id": "marketplaces",
+      "match": "~/.claude/plugins/marketplaces",
+      "replace": "~/.cursor/plugins",
+      "note": "Community skill/plugin sources: the Cursor plugin directory.",
+      "example": { "in": "find ~/.claude/plugins/marketplaces -name SKILL.md", "out": "find ~/.cursor/plugins -name SKILL.md" }
+    },
+    {
+      "id": "project-settings",
+      "match": ".claude/settings.json",
+      "replace": ".cursor/hooks.json",
+      "note": "Project hook configuration (same mapping as the phase-2 rule transform). Runs after user-settings, so ~/.claude/settings.json is already consumed.",
+      "example": { "in": "hooks in `.claude/settings.json` are loaded", "out": "hooks in `.cursor/hooks.json` are loaded" }
+    },
+    {
+      "id": "plans",
+      "match": ".claude/plans",
+      "replace": ".ecc/plans",
+      "note": "PLAN.md section 8: neutral project artifact directory. The plan-canvas CLI takes the plan path as an argument, so no shipped script depends on the old default.",
+      "example": { "in": "write to .claude/plans/feature.plan.md", "out": "write to .ecc/plans/feature.plan.md" }
+    },
+    {
+      "id": "prds",
+      "match": ".claude/prds",
+      "replace": ".ecc/prds",
+      "note": "PLAN.md section 8.",
+      "example": { "in": ".claude/prds/checkout.md", "out": ".ecc/prds/checkout.md" }
+    },
+    {
+      "id": "prps",
+      "match": ".claude/PRPs",
+      "replace": ".ecc/prds",
+      "note": "PLAN.md section 8 maps PRPs onto the same .ecc/prds target (no occurrences in skills; fixture guards the rule).",
+      "example": { "in": ".claude/PRPs/checkout.md", "out": ".ecc/prds/checkout.md" }
+    },
+    {
+      "id": "reviews",
+      "match": ".claude/reviews",
+      "replace": ".ecc/reviews",
+      "note": "PLAN.md section 8.",
+      "example": { "in": ".claude/reviews/OWNER/REPO/issue-17-review.md", "out": ".ecc/reviews/OWNER/REPO/issue-17-review.md" }
+    },
+    {
+      "id": "tdd-artifacts",
+      "match": ".claude/tdd",
+      "replace": ".ecc/tdd",
+      "note": "Agent-chosen artifact directory (no shipped script reads it).",
+      "example": { "in": ".claude/tdd/login.tdd.md", "out": ".ecc/tdd/login.tdd.md" }
+    },
+    {
+      "id": "evals",
+      "match": ".claude/evals",
+      "replace": ".ecc/evals",
+      "note": "Agent-chosen artifact directory.",
+      "example": { "in": ".claude/evals/feature-name.md", "out": ".ecc/evals/feature-name.md" }
+    },
+    {
+      "id": "project-commands",
+      "match": ".claude/commands/",
+      "replace": ".cursor/commands/",
+      "note": "Project slash commands live in .cursor/commands on Cursor.",
+      "example": { "in": "create `.claude/commands/bug-check.md`", "out": "create `.cursor/commands/bug-check.md`" }
+    },
+    {
+      "id": "home-catchall",
+      "match": "~/.claude/",
+      "replace": "<ECC_AGENT_DATA_HOME>/",
+      "note": "Remaining home-dir ECC data paths default to the ECC agent data home (~/.cursor/ecc). Allowlisted lines and earlier rules never reach this rule.",
+      "example": { "in": "log to `~/.claude/canary-watch.log`", "out": "log to `<ECC_AGENT_DATA_HOME>/canary-watch.log`" }
+    },
+    {
+      "id": "project-catchall",
+      "match": ".claude/",
+      "replace": ".ecc/",
+      "note": "Remaining project-local Claude artifact dirs default to the neutral .ecc/ directory.",
+      "example": { "in": "artifacts under `.claude/work-state/`", "out": "artifacts under `.ecc/work-state/`" }
+    }
+  ],
+  "skillOverrides": {
+    "search-first": [
+      {
+        "id": "sf-mcp-config",
+        "match": "Check `~/.claude/settings.json` and search",
+        "replace": "Check `~/.cursor/mcp.json` and search",
+        "note": "The line advises checking the MCP configuration; on Cursor that is mcp.json, not the ECC hook setup file."
+      }
+    ],
+    "blueprint": [
+      {
+        "id": "bp-vendoring",
+        "match": "`~/.claude/skills/blueprint/SKILL.md`",
+        "replace": "`~/.cursor/skills/blueprint/SKILL.md`",
+        "note": "Vendoring a single skill outside the plugin means copying it into the user skills directory."
+      }
+    ],
+    "skill-host-compat": [
+      {
+        "id": "shc-subst-list",
+        "match": "`${CLAUDE_SESSION_ID}`, `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PLUGIN_ROOT}`,",
+        "replace": "`${CLAUDE_SESSION_ID}`, `${CLAUDE_SKILL_DIR}`, the plugin-root variable,",
+        "note": "The skill documents Claude-only substitution tokens; the token literals themselves must not survive the build (phase-4 gate)."
+      },
+      {
+        "id": "shc-args-list",
+        "match": "`${CLAUDE_PROJECT_DIR}`, `$ARGUMENTS`) fail",
+        "replace": "the project-dir and arguments substitutions) fail",
+        "note": "Same reason: describe the tokens without keeping the literals."
+      },
+      {
+        "id": "shc-node-example",
+        "match": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/setup.js\" $ARGUMENTS",
+        "replace": "node \"<plugin-root>/scripts/setup.js\" <arguments>",
+        "note": "Non-portable invocation example, rewritten to placeholder text."
+      }
+    ],
+    "ecc-recipes": [
+      {
+        "id": "er-marketplace",
+        "match": "\"$HOME\"/.claude/plugins/marketplaces/ecc/commands \\",
+        "replace": "\"$ECC_PLUGIN_ROOT\"/commands \\",
+        "note": "ECC commands live in the installed plugin on Cursor."
+      },
+      {
+        "id": "er-cache",
+        "match": "  \"$HOME\"/.claude/plugins/cache/ecc/ecc/*/commands \\\n",
+        "replace": "",
+        "note": "Claude plugin-cache candidate dropped; the plugin commands directory above always exists."
+      },
+      {
+        "id": "er-project-commands",
+        "match": "./.claude/commands \\",
+        "replace": "./.cursor/commands \\",
+        "note": "Project commands directory on Cursor."
+      },
+      {
+        "id": "er-user-commands",
+        "match": "\"$HOME\"/.claude/commands; do",
+        "replace": "\"$HOME\"/.cursor/commands; do",
+        "note": "TODO(verify): whether Cursor reads a user-level ~/.cursor/commands directory is not documented; kept as a harmless fallback candidate after $ECC_PLUGIN_ROOT/commands."
+      }
+    ],
+    "mle-workflow": [
+      {
+        "id": "mle-dmux",
+        "match": "`strategic-compact` / `dmux-workflows`",
+        "replace": "`strategic-compact` / native `/multitask`",
+        "note": "dmux-workflows is excluded (PLAN.md section 2): replacement is native Cursor /multitask + worktrees."
+      }
+    ],
+    "plan-orchestrate": [
+      {
+        "id": "po-dmux",
+        "match": "prefer `dmux-workflows` or the native `workflows/*.workflow.js` scripts instead",
+        "replace": "prefer native Cursor `/multitask` (each subagent in its own environment), worktrees, or the native `workflows/*.workflow.js` scripts instead",
+        "note": "dmux-workflows is excluded (PLAN.md section 2)."
+      }
+    ],
+    "agent-runtime-gateway-smoke-test": [
+      {
+        "id": "args-hermes",
+        "match": "- `hermes-imports` for sanitizing a local workflow before sharing it.",
+        "replace": "- `opensource-pipeline` for sanitizing a local project before sharing it.",
+        "note": "hermes-imports is excluded (Hermes-only); the sanitizing role is covered by the opensource-pipeline family."
+      }
+    ]
+  },
+  "claudeAllowlist": {
+    "agent-sort": { "reason": "Plans ECC installs across harnesses; the .claude/ paths are Claude-side install destinations (the subject).", "patterns": ["*"] },
+    "agentic-os": { "reason": "Documents a Claude Code agent-OS architecture (.claude/commands, .claude/mcp.json are the subject).", "patterns": ["*"] },
+    "autonomous-loops": { "reason": "Deprecated skill retained for compatibility; examples are Claude-specific.", "patterns": ["*"] },
+    "ck": { "reason": "Third-party Context Keeper tool for Claude Code; its install paths are the subject.", "patterns": ["*"] },
+    "config-gc": { "reason": "Garbage collection of the Claude Code configuration surface (the subject).", "patterns": ["*"] },
+    "delivery-gate": { "reason": "Claude stop-hook install instructions (python hook, ~/.claude/scripts); Cursor port is phase 6-7.", "patterns": ["*"] },
+    "gateguard": { "reason": "Gate semantics mirror the shipped gateguard-fact-force script (.claude/worktrees detection, Claude tool classes).", "patterns": ["*"] },
+    "hookify-rules": { "reason": "The shipped hookify-runtime script scans .claude/hookify.*.local.md verbatim; the text must match the script.", "patterns": ["*"] },
+    "plankton-code-quality": { "reason": "Third-party Plankton tool; its .claude/hooks install is the subject.", "patterns": ["*"] },
+    "security-scan": { "reason": "Audits .claude/ directories; that is its purpose.", "patterns": ["*"] },
+    "skill-host-compat": { "reason": "Lints skills for Claude/Codex/Cursor differences; Claude tokens are the subject (substitution literals still rewritten via overrides).", "patterns": ["*"] },
+    "skill-stocktake": { "reason": "Audits the Claude skills/commands inventory (bash helpers, not Windows-verified).", "patterns": ["*"] },
+    "strategic-compact": { "reason": "The manual-install fallback block documents Claude settings verbatim; plugin installs need no setup (stated in the skill).", "patterns": ["*"] },
+    "workspace-surface-audit": { "reason": "Multi-harness surface audit; enumerates .claude/.codex/etc. as audit targets.", "patterns": ["*"] },
+    "ecc-guide": { "reason": "Enumerates harness config directories (.claude/, .cursor/, .codex/, ...).", "patterns": ["*"] },
+    "continuous-learning-v2": { "reason": "~/.claude/homunculus is referenced only as a migration source (legacy Claude data dir).", "patterns": ["~/.claude/homunculus"] },
+    "tdd-workflow": { "reason": "The shipped scripts/lib/package-manager.js reads .claude/package-manager.json verbatim; the text must match the script.", "patterns": [".claude/package-manager.json"] }
+  }
+}

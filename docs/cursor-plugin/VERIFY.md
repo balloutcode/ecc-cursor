@@ -101,7 +101,8 @@ TODO(verify):
 
 - [ ] **globs в контексте агента** — повторить при **чтении/правке** `.ts`-файла
       агентом (не только «файл открыт у пользователя»); зафиксировать в фазе 4
-      вместе с замером `paths:` у языковых скиллов.
+      вместе с замером `paths:` у языковых скиллов. Шаг перенесён в чек-лист
+      фазы 4 (пункт 6).
 
 ## Фаза 3
 
@@ -131,3 +132,51 @@ TODO(verify):
 - [x] **Вызов `/ecc-planner`** — подтверждено.
 - [ ] **Автоделегирование** с 72 сабагентами — отложено.
 - [ ] **readonly на запись файлов** — отложено.
+
+## Фаза 4
+
+Проверка: `node scripts/cursor-plugin/build.js`,
+`node scripts/cursor-plugin/install-local.js`, полный рестарт Cursor,
+локальная установка `~/.cursor/plugins/local/ecc-cursor` (24.11.2026).
+
+Customize -> Plugins -> `ecc-cursor` (после переустановки и полного рестарта):
+
+- [x] **Логотип, v0.1.0** — OK.
+- [x] **MCP chrome-devtools** — OK.
+- [x] **Skills: 325** — OK.
+- [x] **Subagents: 72** — OK.
+- [x] **Rules: 121** — OK.
+- [x] **Commands: 110** — OK.
+- [x] **Hooks: 4** — OK.
+
+Примечание: ранее Customize показывал Skills 254 из-за битой установленной
+копии (в ней был только `skills/`, без `plugin.json`, `rules/`, `agents/`,
+`commands/`, `hooks/`, `assets/`); переустановка исправила.
+
+Чек-лист:
+
+1. [x] Customize: логотип, v0.1.0, MCP chrome-devtools, Skills 325,
+   Subagents 72, Rules 121, Commands 110, Hooks 4 — OK (см. примечание про
+   битую копию).
+2. [x] `/tdd-workflow` — OK: в установленной копии `.ecc/tdd/` и `.claude/tdd/`
+   нет. Косметика: строка ~249 («If the repository already uses Claude-specific
+   local artifacts, the .ecc/tdd/ location is also acceptable») после замены
+   звучит нелогично — TODO(cosmetic).
+3. [ ] Ссылки на агентов — PARTIAL: ссылки в обратных кавычках переписаны на
+   `ecc-*`, файлы есть в `agents/`. Голые имена в таблицах и прозе
+   (`prompt-optimizer`, `brownfield-retrospective`, `plan-orchestrate`,
+   `orch-add-feature`) остались без `ecc-`. В `opensource-pipeline`
+   `subagent_type="opensource-forker"` указывает на несуществующего агента.
+   TODO(verify, phase 5): расширить трансформ агентских ссылок.
+4. [x] `/plan-canvas` — OK: `.ecc/plans/` и `<ECC_AGENT_DATA_HOME>/plan-canvas/`;
+   `.claude/` и `~/.claude/` нет.
+5. [x] `typescript-patterns` с `paths:` — OK: вызывается через
+   `/typescript-patterns`.
+6. [ ] Globs-правило — FAIL: правило не подключилось даже с `@`-файлом.
+   TODO(verify, phase 8). Перенесено из фазы 2.
+7. [ ] Скиллы из allowlist `path-map.json` (например `/security-scan`,
+   `/config-gc`, `/gateguard`) — в этой сессии не проверялись.
+
+Результат (24.11.2026): Customize и вызовы `/tdd-workflow`, `/plan-canvas`,
+`/typescript-patterns` — OK. Ссылки на агентов — PARTIAL (TODO phase 5).
+Globs — FAIL (TODO phase 8).

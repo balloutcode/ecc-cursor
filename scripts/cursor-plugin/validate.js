@@ -21,6 +21,8 @@ const T = require('../lib/cursor-plugin/transforms');
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const PLUGIN_ROOT = path.join(REPO_ROOT, 'build', 'cursor-plugin', 'ecc-cursor');
 
+const SKILL_FRONTMATTER_ALLOWLIST = new Set(['name', 'description', 'paths', 'disable-model-invocation', 'metadata']);
+
 const failures = [];
 const warnings = [];
 const fail = msg => failures.push(msg);
@@ -139,6 +141,18 @@ function validateSkills() {
       fail(`skill without name in frontmatter: skills/${e.name}`);
     } else if (name !== e.name) {
       fail(`skill name '${name}' != folder '${e.name}'`);
+    }
+    if (!T.getFrontmatterField(fm, 'description')) fail(`skill without description: skills/${e.name}`);
+    // Cursor skill frontmatter allowlist (cursor.com/docs/context/skills;
+    // phase 4 transform): name, description, paths, disable-model-invocation,
+    // metadata
+    if (fm) {
+      for (const line of fm.split(/\r?\n/)) {
+        const m = line.match(/^([A-Za-z][\w-]*):/);
+        if (m && !SKILL_FRONTMATTER_ALLOWLIST.has(m[1])) {
+          fail(`skill with unsupported frontmatter key '${m[1]}': skills/${e.name}`);
+        }
+      }
     }
   }
   return count;

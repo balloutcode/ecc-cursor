@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Link integrity checker for the ecc-cursor build (phase 3: warn mode).
+ * Link integrity checker for the ecc-cursor build (phase 4: warn mode).
  *
  * Scans every markdown component of the built plugin and reports references
  * to agents / skills / commands / rules / scripts that exist in the upstream
@@ -11,10 +11,12 @@
  * 0 unless --fail is passed (fail mode arrives with phase 5).
  *
  * Agent references resolve through cursor-plugin/maps/agent-names.json
- * (phase 3): built agents are `ecc-<id>`, so a bare token resolves iff its
- * mapped ecc-* name is built (bare names survive in skills/commands until
- * phases 4-5), and an `ecc-<id>` token resolves iff that exact agent is
- * built (catches typos in renamed references).
+ * (phase 3): built agents are `ecc-<id>`. Phase 4 removed the temporary
+ * bare-name resolution for files under skills/ (the skill transform now
+ * renames references to ecc-*, so a bare token in a built skill is prose,
+ * not a link); commands keep the bare resolution until phase 5. An
+ * `ecc-<id>` token resolves iff that exact agent is built (catches typos
+ * in renamed references).
  */
 
 const fs = require('fs');
@@ -57,9 +59,15 @@ const RULE_NS_REF_RE = /(?<![\w-])rules\/([\w-]+)\/([\w-]+)\.md\b/gm;
 const RULE_FLAT_REF_RE = /(?<![\w-])rules\/([\w-]+)\.mdc\b/gm;
 
 function scanTokenRefs(tokens, file, ctx) {
-  for (const name of ctx.repoAgents) {
-    // bare reference (pre-rename form): resolves iff the mapped ecc-* agent is built
-    if (tokens.has(name) && !ctx.builtAgents.has(ctx.agentNameMap[name])) ctx.add('agents', name, file);
+  // phase 4: bare agent names in built skills are prose (the skill transform
+  // renamed real references to ecc-*); only commands keep the temporary
+  // bare-name resolution until phase 5.
+  const inSkillsDir = T.toPosix(path.relative(PLUGIN_ROOT, file)).startsWith('skills/');
+  if (!inSkillsDir) {
+    for (const name of ctx.repoAgents) {
+      // bare reference (pre-rename form): resolves iff the mapped ecc-* agent is built
+      if (tokens.has(name) && !ctx.builtAgents.has(ctx.agentNameMap[name])) ctx.add('agents', name, file);
+    }
   }
   for (const eccName of ctx.eccAgentNames) {
     // renamed reference: resolves iff that exact agent is built
@@ -80,7 +88,16 @@ function scanPathRefs(content, file, ctx) {
     let ref = m[1];
     if (ref.startsWith('./')) ref = ref.slice(2);
     if (ref.startsWith('../')) continue;
-    if (!ctx.builtScripts.has(ref)) ctx.add('scripts', ref, file);
+    if (ctx.builtScripts.has(ref)) continue;
+    // intra-skill reference: skills/<name>/ often ships its own scripts/
+    // directory (e.g. story-lifecycle/scripts/ledger.js); phase 4 resolves
+    // these against the skill folder before calling the link broken.
+    const rel = T.toPosix(path.relative(PLUGIN_ROOT, file));
+    if (rel.startsWith('skills/')) {
+      const skillName = rel.split('/')[1];
+      if (fs.existsSync(path.join(PLUGIN_ROOT, 'skills', skillName, ref))) continue;
+    }
+    ctx.add('scripts', ref, file);
   }
 
   SLASH_REF_RE.lastIndex = 0;
