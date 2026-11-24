@@ -2,13 +2,15 @@
 'use strict';
 
 /**
- * ecc-cursor plugin builder (phase 3: agents).
+ * ecc-cursor plugin builder (phase 4: skills).
  *
  * Reads upstream ECC sources (never modifies them), applies the transform
  * set (rules: paths->globs + native .cursor/rules copies + link fixes +
  * agent refs -> ecc-*; agents: agent-emit-cursor.js - name ecc-<id>,
  * model inherit, readonly for the 11 strict tool sets, tools list restated
- * in the body; contexts: ecc-context-* skills; markdown:
+ * in the body; skills: frontmatter allowlist + paths for language skills,
+ * path-map rewrites, agent refs -> ecc-*, mcp__ neutralization, $ARGUMENTS,
+ * tool tokens; contexts: ecc-context-* skills; markdown:
  * rules/<ns>/<f>.md -> rules/<ns>-<f>.mdc references), and writes a ready
  * Cursor plugin to build/cursor-plugin/ecc-cursor/ plus a build report to
  * build/cursor-plugin/report.json. Also regenerates
@@ -36,6 +38,7 @@ const T = require('../lib/cursor-plugin/transforms');
 const R = require('../lib/cursor-plugin/rules');
 const E = require('../lib/cursor-plugin/agent-emit-cursor');
 const N = require('../lib/cursor-plugin/agent-names');
+const S = require('../lib/cursor-plugin/skills');
 const { createAgentRefTransform } = require('../lib/cursor-plugin/agent-refs');
 const { parseAllAgents } = require('../lib/agent-ir');
 const { generateHooksJson, loadHookMap, serialize } = require('./generate-hooks');
@@ -169,21 +172,54 @@ function collectAgents(warnings, ruleRefs, agentRefs, nameMap) {
   return { ops, stats: { ...stats, renamedRefs } };
 }
 
-function collectSkills(skillSet, exclusions, ruleRefs) {
+function collectSkills(skillSet, exclusions, skillTransform) {
   const ops = [];
   const skipped = [];
   const included = [...skillSet].filter(s => !exclusions.skills[s]).sort();
   for (const name of Object.keys(exclusions.skills).sort()) {
     if (skillSet.has(name)) skipped.push({ path: `skills/${name}`, reason: exclusions.skills[name] });
   }
+  const stats = {
+    total: included.length,
+    pathRewrites: 0,
+    toolTokens: 0,
+    overridesApplied: 0,
+    droppedKeys: 0,
+    allowedToolsRestated: 0,
+    pathsAdded: 0,
+    agentRefsRenamed: 0,
+    mcpNeutralized: 0,
+    argumentsRewritten: 0,
+  };
+  // op transforms run lazily at write time, so per-skill flags are collected
+  // in sets (their sizes are read by the report after the write loop)
+  const changedSkills = new Set();
+  const pathSkills = new Set();
   for (const name of included) {
     const skillDir = path.join(REPO_ROOT, 'skills', name);
     for (const rel of listFilesRecursive(skillDir)) {
       const isMarkdown = rel.endsWith('.md');
-      ops.push(createOp(path.join(skillDir, rel), path.join('skills', name, rel), isMarkdown ? ruleRefs : null));
+      const transform = isMarkdown
+        ? content => {
+            const r = skillTransform(content, { skillName: name, isSkillMd: rel === 'SKILL.md' });
+            stats.pathRewrites += r.meta.pathRewrites;
+            stats.toolTokens += r.meta.toolTokens;
+            stats.overridesApplied += r.meta.overridesApplied;
+            stats.droppedKeys += r.meta.droppedKeys.length;
+            stats.allowedToolsRestated += r.meta.allowedToolsRestated ? 1 : 0;
+            stats.pathsAdded += r.meta.pathsAdded;
+            stats.agentRefsRenamed += r.meta.agentRefsRenamed;
+            stats.mcpNeutralized += r.meta.mcpNeutralized;
+            stats.argumentsRewritten += r.meta.argumentsRewritten;
+            if (r.meta.changed) changedSkills.add(name);
+            if (r.meta.pathsAdded > 0) pathSkills.add(name);
+            return r.content;
+          }
+        : null;
+      ops.push(createOp(path.join(skillDir, rel), path.join('skills', name, rel), transform));
     }
   }
-  return { ops, skipped, included };
+  return { ops, skipped, included, stats, changedSkills, pathSkills };
 }
 
 function collectContexts() {
@@ -362,7 +398,30 @@ function build() {
   const ruleRefs = R.createRuleRefTransform(R.listRuleNamespaces(REPO_ROOT));
   const rules = collectRules(warnings, agentRefs);
   const agents = collectAgents(warnings, ruleRefs, agentRefs, nameMap);
-  const skills = collectSkills(composition.skillSet, exclusions, ruleRefs);
+
+  // phase 4: skill transform (path-map, frontmatter allowlist, ecc-* refs)
+  const pathMap = S.loadPathMap(REPO_ROOT);
+  const namespaces = R.listRuleNamespaces(REPO_ROOT);
+  const namespaceGlobs = S.collectNamespaceGlobs(REPO_ROOT);
+  const contextIds = fs.readdirSync(path.join(REPO_ROOT, 'contexts'))
+    .filter(f => f.endsWith('.md')).map(f => `ecc-context-${f.slice(0, -3)}`);
+  const builtSkills = new Set([
+    ...[...composition.skillSet].filter(s => !exclusions.skills[s]),
+    ...contextIds,
+  ]);
+  for (const alias of [...Object.keys(S.SKILL_PATH_EXACT), ...Object.keys(S.SKILL_PATH_PREFIX)]) {
+    const hit = [...builtSkills].some(s => s === alias || s.startsWith(alias));
+    if (!hit) warnings.push(`skills: path alias '${alias}' matches no included skill (upstream drift?)`);
+  }
+  const skillTransform = S.createSkillTransform({
+    pathMap,
+    builtSkills,
+    namespaceGlobs,
+    namespaces,
+    ruleRefs,
+    agentRefs,
+  });
+  const skills = collectSkills(composition.skillSet, exclusions, skillTransform);
   const contexts = collectContexts();
   const commands = collectCommands(ruleRefs);
   const hooks = collectHooks(hookMap);
@@ -438,7 +497,7 @@ function build() {
     .sort();
 
   const report = {
-    phase: 3,
+    phase: 4,
     profile: 'full',
     modules: {
       included: composition.fullModules,
@@ -465,6 +524,23 @@ function build() {
       renamedAgentRefs: rules.stats.renamedAgentRefs,
     },
     contextSkills: contexts.ids.map(id => `ecc-context-${id}`).sort(),
+    skills: {
+      total: skills.included.length,
+      transformed: skills.changedSkills.size,
+      pathRewrites: skills.stats.pathRewrites,
+      toolTokens: skills.stats.toolTokens,
+      overridesApplied: skills.stats.overridesApplied,
+      droppedKeys: skills.stats.droppedKeys,
+      allowedToolsRestated: skills.stats.allowedToolsRestated,
+      pathsAdded: skills.stats.pathsAdded,
+      langSkillsWithPaths: skills.pathSkills.size,
+      langSkillNames: [...skills.pathSkills].sort(),
+      agentRefsRenamed: skills.stats.agentRefsRenamed,
+      mcpNeutralized: skills.stats.mcpNeutralized,
+      argumentsRewritten: skills.stats.argumentsRewritten,
+      pathMapRules: pathMap.rules.length,
+      allowlisted: Object.keys(pathMap.claudeAllowlist || {}).sort(),
+    },
     agents: {
       total: agents.stats.total,
       readonly: agents.stats.readonly,
@@ -497,10 +573,10 @@ function build() {
 if (require.main === module) {
   const report = build();
   const c = report.counts;
-  console.log('ecc-cursor build OK (phase 3: agents)');
+  console.log('ecc-cursor build OK (phase 4: skills)');
   console.log(`  rules:    ${c.rules} (native frontmatter: ${report.rules.withNativeFrontmatter}/${report.rules.total}, alwaysApply true: ${report.rules.alwaysApplyTrue}, agent refs renamed: ${report.rules.renamedAgentRefs})`);
   console.log(`  agents:   ${c.agents} (readonly: ${report.agents.readonly}, agent refs renamed: ${report.agents.renamedRefs}, name map ${report.agents.nameMapChanged ? 'UPDATED' : 'unchanged'})`);
-  console.log(`  skills:   ${c.skills} (${report.contextSkills.length} context skills)`);
+  console.log(`  skills:   ${c.skills} (${report.contextSkills.length} context skills; transformed ${report.skills.transformed}, path rewrites ${report.skills.pathRewrites}, agent refs renamed ${report.skills.agentRefsRenamed}, lang skills with paths ${report.skills.langSkillsWithPaths})`);
   console.log(`  commands: ${c.commands.total} (upstream ${c.commands.upstream} + overrides ${c.commands.overrides})`);
   console.log(`  hooks:    ${c.hooks.events} events, ${c.hooks.entries} entries`);
   console.log(`  scripts:  ${c.scripts} (require-closure, ${report.scriptClosure.seeds.length} seeds)`);
