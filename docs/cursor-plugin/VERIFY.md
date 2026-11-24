@@ -133,37 +133,50 @@ TODO(verify):
 - [ ] **Автоделегирование** с 72 сабагентами — отложено.
 - [ ] **readonly на запись файлов** — отложено.
 
-## Фаза 4 (ожидает ручной проверки)
+## Фаза 4
 
 Проверка: `node scripts/cursor-plugin/build.js`,
-`node scripts/cursor-plugin/install-local.js`, Developer: Reload Window,
-локальная установка `~/.cursor/plugins/local/ecc-cursor`.
+`node scripts/cursor-plugin/install-local.js`, полный рестарт Cursor,
+локальная установка `~/.cursor/plugins/local/ecc-cursor` (24.11.2026).
 
-Чек-лист для пользователя:
+Customize -> Plugins -> `ecc-cursor` (после переустановки и полного рестарта):
 
-1. Customize -> Plugins -> `ecc-cursor` -> Skills: **325** скиллов (322 + 3
-   `ecc-context-*`), без ошибок загрузки; латентность открытия списка замерить
-   примерно (сек) и сравнить с фазой 1 (322 скилла до трансформа).
-2. Вызвать `/tdd-workflow` (скилл с переписанными путями): в ответе артефакты
-   TDD лежат в `.ecc/tdd/` (не `.claude/tdd/`), а упоминания
-   `.claude/package-manager.json` сохранены (совпадает с поведением скрипта
-   `scripts/lib/package-manager.js`).
-3. Вызвать `/security-review`: в ответе ссылки на агентов идут с префиксом
-   `ecc-` (например `ecc-security-reviewer`), без bare-имён.
-4. Вызвать `/plan-canvas` (скилл с наибольшим числом переписанных путей):
-   планы — `.ecc/plans/*.plan.md`, состояние канвы —
-   `<ECC_AGENT_DATA_HOME>/plan-canvas/`.
-5. Открыть `typescript-patterns` в Customize: во frontmatter виден `paths:`
-   с glob-ами `**/*.ts` и т.п. TODO(verify): подтвердить, что Cursor читает
-   `paths:` в SKILL.md и учитывает его при подборе скилла (формат поля —
-   по cursor.com/docs/context/skills).
-6. (Перенесено из фазы 2) Попросить агента прочитать и изменить временный
-   `tmp-rule-check.ts` в корне репозитория, затем спросить: «какие правила
-   сейчас у тебя в контексте?» Ожидание: в списке есть
-   `typescript-coding-style` (или другое typescript-правило). Зафиксировать
-   результат в разделе «Фаза 2» выше.
-7. Скиллы из allowlist `path-map.json` (например `/security-scan`,
-   `/config-gc`, `/gateguard`) по-прежнему показывают пути `.claude/` —
-   это намеренно (предмет этих скиллов — конфигурация Claude Code).
+- [x] **Логотип, v0.1.0** — OK.
+- [x] **MCP chrome-devtools** — OK.
+- [x] **Skills: 325** — OK.
+- [x] **Subagents: 72** — OK.
+- [x] **Rules: 121** — OK.
+- [x] **Commands: 110** — OK.
+- [x] **Hooks: 4** — OK.
 
-Результат: (ожидает)
+Примечание: ранее Customize показывал Skills 254 из-за битой установленной
+копии (в ней был только `skills/`, без `plugin.json`, `rules/`, `agents/`,
+`commands/`, `hooks/`, `assets/`); переустановка исправила.
+
+Чек-лист:
+
+1. [x] Customize: логотип, v0.1.0, MCP chrome-devtools, Skills 325,
+   Subagents 72, Rules 121, Commands 110, Hooks 4 — OK (см. примечание про
+   битую копию).
+2. [x] `/tdd-workflow` — OK: в установленной копии `.ecc/tdd/` и `.claude/tdd/`
+   нет. Косметика: строка ~249 («If the repository already uses Claude-specific
+   local artifacts, the .ecc/tdd/ location is also acceptable») после замены
+   звучит нелогично — TODO(cosmetic).
+3. [ ] Ссылки на агентов — PARTIAL: ссылки в обратных кавычках переписаны на
+   `ecc-*`, файлы есть в `agents/`. Голые имена в таблицах и прозе
+   (`prompt-optimizer`, `brownfield-retrospective`, `plan-orchestrate`,
+   `orch-add-feature`) остались без `ecc-`. В `opensource-pipeline`
+   `subagent_type="opensource-forker"` указывает на несуществующего агента.
+   TODO(verify, phase 5): расширить трансформ агентских ссылок.
+4. [x] `/plan-canvas` — OK: `.ecc/plans/` и `<ECC_AGENT_DATA_HOME>/plan-canvas/`;
+   `.claude/` и `~/.claude/` нет.
+5. [x] `typescript-patterns` с `paths:` — OK: вызывается через
+   `/typescript-patterns`.
+6. [ ] Globs-правило — FAIL: правило не подключилось даже с `@`-файлом.
+   TODO(verify, phase 8). Перенесено из фазы 2.
+7. [ ] Скиллы из allowlist `path-map.json` (например `/security-scan`,
+   `/config-gc`, `/gateguard`) — в этой сессии не проверялись.
+
+Результат (24.11.2026): Customize и вызовы `/tdd-workflow`, `/plan-canvas`,
+`/typescript-patterns` — OK. Ссылки на агентов — PARTIAL (TODO phase 5).
+Globs — FAIL (TODO phase 8).
