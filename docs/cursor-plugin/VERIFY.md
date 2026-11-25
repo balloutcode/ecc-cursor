@@ -211,6 +211,15 @@ Cursor (Reload Window бывает недостаточно), локальная
    (и sanitizer, packager), не голый `opensource-forker`.
 7. [ ] `skills/brownfield-retrospective/SKILL.md`: диаграмма начинается с
    `ecc-planner (scope the row)`.
+8. [ ] `commands/evolve.md`: fallback на `%USERPROFILE%/.cursor/plugins/local/ecc-cursor`,
+   инстинкты в `~/.local/share/ecc-homunculus`, нет `CLAUDE_PLUGIN_ROOT`.
+9. [ ] `commands/instinct-status.md`: предупреждение по-прежнему про legacy
+   `~/.claude/skills/continuous-learning-v2/`, чтение инстинктов — из
+   `~/.local/share/ecc-homunculus`.
+10. [ ] `commands/learn-eval.md` и `commands/skill-create.md`: проектные скиллы
+    в `.cursor/skills/`, не в `.ecc/skills/`.
+11. [ ] `commands/cost-report.md`: сниппет читает `ECC_AGENT_DATA_HOME`, запасной
+    путь `.cursor/ecc`, без `".claude"`.
 
 TODO(verify):
 
