@@ -180,3 +180,43 @@ Customize -> Plugins -> `ecc-cursor` (после переустановки и �
 Результат (24.11.2026): Customize и вызовы `/tdd-workflow`, `/plan-canvas`,
 `/typescript-patterns` — OK. Ссылки на агентов — PARTIAL (TODO phase 5).
 Globs — FAIL (TODO phase 8).
+
+## Фаза 5
+
+Проверка: `node scripts/cursor-plugin/build.js`,
+`node scripts/cursor-plugin/install-local.js`, полный выход и повторный запуск
+Cursor (Reload Window бывает недостаточно), локальная копия
+`%USERPROFILE%\.cursor\plugins\local\ecc-cursor`.
+
+Ожидание сборки: Skills 325, Commands 110. Среди команд есть
+`ecc-plan-canvas` и `ecc-ecc-guide` (коллизия со скиллом того же имени;
+скиллы `plan-canvas` и `ecc-guide` остаются). Команды `plan-canvas` и
+`ecc-guide` в списке Commands быть не должно.
+
+Чек-лист (каждую проверку — отдельным промптом «прочитай установленную копию,
+ничего не меняй»):
+
+1. [ ] Customize: Skills 325, Commands 110. В Commands есть `ecc-plan-canvas`
+   и `ecc-ecc-guide`, нет дубля `plan-canvas` / `ecc-guide`.
+2. [ ] Новый чат, `/plan`: текст ссылается на `ecc-planner` (и другие `ecc-*`,
+   если они названы). Файлы есть в `agents/`.
+3. [ ] Новый чат, `/code-review`: текст ссылается на `ecc-code-reviewer` и
+   `ecc-security-reviewer`.
+4. [ ] `/code-review` и аргумент: в установленной `commands/code-review.md` нет
+   `$ARGUMENTS`, есть блок Arguments. После команды можно написать номер или
+   URL PR, либо ничего — тогда локальное ревью.
+5. [ ] `skills/prompt-optimizer/SKILL.md`: в таблице агентов `ecc-planner`,
+   `ecc-tdd-guide`, `ecc-code-reviewer`, не голые имена.
+6. [ ] `skills/opensource-pipeline/SKILL.md`: `subagent_type="ecc-opensource-forker"`
+   (и sanitizer, packager), не голый `opensource-forker`.
+7. [ ] `skills/brownfield-retrospective/SKILL.md`: диаграмма начинается с
+   `ecc-planner (scope the row)`.
+
+TODO(verify):
+
+- [ ] Общий слэш у скилла и команды (`/plan-canvas` против `/ecc-plan-canvas`).
+- [ ] `disable-model-invocation` снят у `setup-pm` и `auto-update` (поля нет в
+      схеме команд Cursor). Не вызываются ли они сами из описания.
+- [ ] Bash-сниппеты критичных команд под PowerShell (PLAN.md раздел 8; агент
+      переводит сам, точечно не переписывались).
+- [ ] Globs-правило — по-прежнему FAIL с фазы 4, владелец фаза 8.
