@@ -87,6 +87,56 @@ function buildFrontmatter({ pluginName, description, argumentHint }) {
   return `name: ${pluginName}\ndescription: ${quoteYaml(desc)}`;
 }
 
+const INSTALLED_PLUGIN = '%USERPROFILE%/.cursor/plugins/local/ecc-cursor';
+const INSTINCT_CLI = `${INSTALLED_PLUGIN}/skills/continuous-learning-v2/scripts/instinct-cli.py`;
+
+function pluginRootExpression() {
+  return "(function(){var p=require('path'),o=require('os');var e=(process.env.ECC_PLUGIN_ROOT||process.env.CURSOR_PLUGIN_ROOT||'').trim();if(e)return e;var h=process.env.USERPROFILE||process.env.HOME||o.homedir();return p.join(h,'.cursor','plugins','local','ecc-cursor');})()";
+}
+
+/**
+ * Command-only snippet fixes that path-map literals miss: empty
+ * $ECC_PLUGIN_ROOT fallbacks, quoted '.claude' / ".claude" in node snippets,
+ * and the cost-tracker path (resolveAgentDataHome / ECC_AGENT_DATA_HOME).
+ */
+function rewriteCommandSnippets(content) {
+  let count = 0;
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    let line = lines[i];
+    const original = line;
+    if (line.includes('process.env.CLAUDE_PLUGIN_ROOT') && line.includes("homedir(),'.claude'")) {
+      if (line.includes('ECC_ROOT="$(node -e "')) {
+        const marker = 'console.log(r)")';
+        const at = line.lastIndexOf(marker);
+        const rest = at >= 0 ? line.slice(at + marker.length) : '';
+        line = `ECC_ROOT="$(node -e "var p=require('path'),o=require('os');var e=(process.env.ECC_PLUGIN_ROOT||process.env.CURSOR_PLUGIN_ROOT||'').trim();if(!e){var h=process.env.USERPROFILE||process.env.HOME||o.homedir();e=p.join(h,'.cursor','plugins','local','ecc-cursor');}console.log(e)")"${rest}`;
+      } else if (line.includes('const _r = (function()')) {
+        const marker = 'return d})();';
+        const at = line.lastIndexOf(marker);
+        const rest = at >= 0 ? line.slice(at + marker.length) : '';
+        line = `const _r = ${pluginRootExpression()};${rest}`;
+      }
+    }
+    line = line.replace(
+      /python3 ~\/\.claude\/skills\/continuous-learning-v2\/scripts\/instinct-cli\.py/g,
+      `python3 "${INSTINCT_CLI}"`
+    );
+    line = line.replace(/`CLAUDE_PLUGIN_ROOT`/g, '`ECC_PLUGIN_ROOT`');
+    line = line.replace(
+      'Or if `ECC_PLUGIN_ROOT` is not set (manual installation):',
+      'Or if `ECC_PLUGIN_ROOT` is not set, use the installed plugin copy:'
+    );
+    line = line.replace(
+      'path.join(os.homedir(),".claude","metrics","costs.jsonl")',
+      'path.join((process.env.ECC_AGENT_DATA_HOME||"").trim()||path.join(os.homedir(),".cursor","ecc"),"metrics","costs.jsonl")'
+    );
+    if (line !== original) count += 1;
+    lines[i] = line;
+  }
+  return { content: lines.join('\n'), count };
+}
+
 function loadReplacement(repoRoot, stem) {
   const abs = path.join(repoRoot, BODY_DIR, `${stem}.md`);
   if (!fs.existsSync(abs)) return null;
@@ -213,6 +263,9 @@ function createCommandTransform(opts) {
     }
 
     let body = parts.frontmatter ? parts.body.replace(/^\n/, '') : source;
+    const snippets = rewriteCommandSnippets(body);
+    body = snippets.content;
+    meta.snippetRewrites = snippets.count;
 
     const lines = body.split('\n');
     for (let i = 0; i < lines.length; i += 1) {
@@ -247,7 +300,7 @@ function createCommandTransform(opts) {
     meta.argumentsRewritten += args.count;
 
     if (allowedTools) {
-      body = body.replace(/\s*$/, '') + S.restateAllowedTools(allowedTools);
+      body = body.replace(/\s*$/, '') + S.restateAllowedTools(allowedTools, 'command');
       meta.allowedToolsRestated = true;
     }
 
@@ -278,4 +331,6 @@ module.exports = {
   createSlashRewriter,
   createCommandTransform,
   loadReplacement,
+  rewriteCommandSnippets,
+  INSTALLED_PLUGIN,
 };

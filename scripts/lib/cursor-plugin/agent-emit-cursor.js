@@ -66,7 +66,7 @@ function emitCursorAgent(ir, options = {}) {
   ];
 
   const rawBody = (ir.body || '').replace(/^\n+/, '').trimEnd();
-  const transformed = options.transformBody ? options.transformBody(rawBody) : rawBody;
+  const transformed = options.transformBody ? options.transformBody(rawBody, ir) : rawBody;
   const body = neutralizeMcpRefs(transformed);
   const toolsSection = renderToolsSection(ir, warnings);
 

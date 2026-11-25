@@ -158,17 +158,18 @@ function sanitizeFrontmatter(frontmatter, { paths }) {
 }
 
 /** Restate a Claude allowed-tools list with Cursor-equivalent tool names. */
-function restateAllowedTools(raw) {
+function restateAllowedTools(raw, kind) {
   const mapped = raw
     .replace(/\bBash\b/g, 'Shell')
     .replace(/\bMultiEdit\b/g, 'Edit')
     .replace(/\bNotebookEdit\b/g, 'Edit');
+  const noun = kind === 'command' ? 'command' : 'skill';
   return [
     '',
     '',
     '## Recommended tools',
     '',
-    `The source skill declared an \`allowed-tools\` list (a Claude Code-only key that Cursor does not read). Treat it as guidance, not enforcement: ${mapped}.`,
+    `The source ${noun} declared an \`allowed-tools\` list (a Claude Code-only key that Cursor does not read). Treat it as guidance, not enforcement: ${mapped}.`,
     '',
   ].join('\n');
 }

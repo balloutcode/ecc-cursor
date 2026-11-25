@@ -137,11 +137,25 @@
       "example": { "in": "create `.claude/commands/bug-check.md`", "out": "create `.cursor/commands/bug-check.md`" }
     },
     {
+      "id": "homunculus-store",
+      "match": "~/.claude/homunculus",
+      "replace": "~/.local/share/ecc-homunculus",
+      "note": "instinct-cli.py _resolve_homunculus_dir default. Runtime still prefers absolute CLV2_HOMUNCULUS_DIR, then absolute $XDG_DATA_HOME/ecc-homunculus. Must run before home-catchall.",
+      "example": { "in": "`~/.claude/homunculus/instincts/`", "out": "`~/.local/share/ecc-homunculus/instincts/`" }
+    },
+    {
       "id": "home-catchall",
       "match": "~/.claude/",
       "replace": "<ECC_AGENT_DATA_HOME>/",
       "note": "Remaining home-dir ECC data paths default to the ECC agent data home (~/.cursor/ecc). Allowlisted lines and earlier rules never reach this rule.",
       "example": { "in": "log to `~/.claude/canary-watch.log`", "out": "log to `<ECC_AGENT_DATA_HOME>/canary-watch.log`" }
+    },
+    {
+      "id": "project-skills",
+      "match": ".claude/skills/",
+      "replace": ".cursor/skills/",
+      "note": "Project skills are discovered from .cursor/skills. Must run before project-catchall, which would rewrite the same path to .ecc/skills.",
+      "example": { "in": "project `.claude/skills/<name>/SKILL.md`", "out": "project `.cursor/skills/<name>/SKILL.md`" }
     },
     {
       "id": "project-catchall",
@@ -309,6 +323,10 @@
     "hookify-list": {
       "reason": "The shipped hookify scanner reads .claude/hookify.*.local.md verbatim; the command must name that path.",
       "patterns": [".claude/hookify"]
+    },
+    "instinct-status": {
+      "reason": "Lines that name the legacy Claude skill directory must stay legacy. The installed plugin copy is a different path.",
+      "patterns": ["~/.claude/skills/continuous-learning-v2/"]
     }
   },
   "agentOverrides": {

@@ -158,9 +158,12 @@ function collectRules(warnings, agentRefs) {
   return { ops, skipped, stats };
 }
 
-function applyAgentOverrides(body, groups) {
+function applyAgentOverrides(body, groups, agentId) {
+  const lists = agentId
+    ? [groups && groups[agentId]].filter(Boolean)
+    : Object.values(groups || {});
   let out = body;
-  for (const list of Object.values(groups || {})) {
+  for (const list of lists) {
     for (const ov of list) {
       if (!ov.match || !out.includes(ov.match)) continue;
       out = out.split(ov.match).join(ov.replace);
@@ -173,8 +176,8 @@ function collectAgents(warnings, ruleRefs, agentRefs, nameMap, agentOverrides) {
   const irs = parseAllAgents(path.join(REPO_ROOT, 'agents'));
   let renamedRefs = 0;
   let structuredRefs = 0;
-  const transformBody = body => {
-    const renamed = agentRefs(ruleRefs(applyAgentOverrides(body, agentOverrides)));
+  const transformBody = (body, ir) => {
+    const renamed = agentRefs(ruleRefs(applyAgentOverrides(body, agentOverrides, ir && ir.id)));
     renamedRefs += renamed.replacements;
     structuredRefs += renamed.structuredReplacements || 0;
     return T.stripClaudeModelPins(renamed.content);

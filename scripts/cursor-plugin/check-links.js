@@ -51,6 +51,7 @@ function tokenize(content) {
 }
 
 const SCRIPT_REF_RE = /(?:^|[\s"'`(=])((?:\.{1,2}\/)?scripts\/[\w@+.,~/-]+\.(?:js|cjs|mjs|py|sh))\b/gm;
+const PLUGIN_SKILL_SCRIPT_RE = /\$ECC_PLUGIN_ROOT\/skills\/([a-z0-9-]+)\/(scripts\/[\w@+.,~/-]+\.(?:js|cjs|mjs|py|sh))/g;
 const SLASH_REF_RE = /(?:^|[\s`"(])\/([a-z][a-z0-9-]{1,40})\b/gm;
 // Rule references: upstream form rules/<ns>/<file>.md (resolves to the
 // flattened <ns>-<file> name) and built form rules/<ns>-<file>.mdc.
@@ -95,11 +96,32 @@ function scanPathRefs(content, file, ctx) {
     ctx.add('scripts', ref, file);
   }
 
+  const relFile = T.toPosix(path.relative(PLUGIN_ROOT, file));
+  const inCommands = relFile.startsWith('commands/');
   SLASH_REF_RE.lastIndex = 0;
   while ((m = SLASH_REF_RE.exec(content)) !== null) {
     const name = m[1];
-    if (ctx.repoCommands.has(name) && !ctx.builtCommands.has(name) && !commandRenamedToSkill(name, ctx)) {
+    if (!ctx.repoCommands.has(name) || ctx.builtCommands.has(name)) continue;
+    // Inside commands, a collision slash (/plan-canvas, /ecc-guide) must
+    // already have been rewritten to the plugin command name.
+    if (inCommands && ctx.builtCommands.has(`ecc-${name}`)) {
       ctx.add('commands', `/${name}`, file);
+      continue;
+    }
+    if (commandRenamedToSkill(name, ctx)) continue;
+    ctx.add('commands', `/${name}`, file);
+  }
+
+  PLUGIN_SKILL_SCRIPT_RE.lastIndex = 0;
+  while ((m = PLUGIN_SKILL_SCRIPT_RE.exec(content)) !== null) {
+    const skill = m[1];
+    const relScript = m[2];
+    if (!ctx.builtSkills.has(skill)) {
+      ctx.add('skills', skill, file);
+      continue;
+    }
+    if (!fs.existsSync(path.join(PLUGIN_ROOT, 'skills', skill, relScript))) {
+      ctx.add('scripts', `$ECC_PLUGIN_ROOT/skills/${skill}/${relScript}`, file);
     }
   }
 
