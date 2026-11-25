@@ -213,10 +213,13 @@ function runTests() {
   t('every skill override fires on the source and lands in the build', () => {
     const pathMap = S.loadPathMap(REPO_ROOT);
     for (const [skill, overrides] of Object.entries(pathMap.skillOverrides)) {
-      const src = fs.readFileSync(path.join(REPO_ROOT, 'skills', skill, 'SKILL.md'), 'utf8');
-      const built = fs.readFileSync(path.join(builtSkillsRoot, skill, 'SKILL.md'), 'utf8');
+      const srcDir = path.join(REPO_ROOT, 'skills', skill);
+      const srcFiles = walkMd(srcDir);
       for (const ov of overrides) {
-        assert.ok(src.includes(ov.match), `override ${ov.id}: match not found in source skills/${skill} (upstream drift)`);
+        const srcHit = srcFiles.find(file => fs.readFileSync(file, 'utf8').includes(ov.match));
+        assert.ok(srcHit, `override ${ov.id}: match not found in source skills/${skill} (upstream drift)`);
+        const rel = path.relative(srcDir, srcHit);
+        const built = fs.readFileSync(path.join(builtSkillsRoot, skill, rel), 'utf8');
         assert.ok(!built.includes(ov.match), `override ${ov.id}: match survived in the build`);
         if (ov.replace) assert.ok(built.includes(ov.replace), `override ${ov.id}: replacement not in the build`);
       }
@@ -275,7 +278,7 @@ function runTests() {
     const { broken, total } = checkLinks();
     assert.ok(!broken.skills.has('dmux-workflows'), 'dmux-workflows still a broken target');
     assert.ok(!broken.skills.has('hermes-imports'), 'hermes-imports still a broken target');
-    assert.ok(total <= 14, `total broken targets grew beyond the phase-1 baseline: ${total}`);
+    assert.strictEqual(total, 0, `broken targets remain: ${total}`);
   });
 
   t('every node script referenced from built skills resolves in the build (repo scripts/ or skill-local)', () => {

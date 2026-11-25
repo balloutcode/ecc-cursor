@@ -313,7 +313,20 @@ function runTests() {
 
   // 12. unit: reference transform patterns and idempotency
   t('agent-refs: all patterns rename, false positives safe, idempotent', () => {
-    const map = { planner: 'ecc-planner', architect: 'ecc-architect', 'homelab-architect': 'ecc-homelab-architect', 'gan-planner': 'ecc-gan-planner', 'opensource-sanitizer': 'ecc-opensource-sanitizer', 'typescript-reviewer': 'ecc-typescript-reviewer' };
+    const map = {
+      planner: 'ecc-planner',
+      architect: 'ecc-architect',
+      'homelab-architect': 'ecc-homelab-architect',
+      'gan-planner': 'ecc-gan-planner',
+      'opensource-sanitizer': 'ecc-opensource-sanitizer',
+      'opensource-forker': 'ecc-opensource-forker',
+      'typescript-reviewer': 'ecc-typescript-reviewer',
+      'tdd-guide': 'ecc-tdd-guide',
+      'code-reviewer': 'ecc-code-reviewer',
+      'spec-miner': 'ecc-spec-miner',
+      search: 'ecc-search',
+      'pubmed-search': 'ecc-pubmed-search',
+    };
     const tr = createAgentRefTransform(map);
     const cases = [
       ['ecc:planner', 'ecc-planner'], // P1
@@ -330,10 +343,25 @@ function runTests() {
       ['**homelab-architect**', '**ecc-homelab-architect**'],
       ['| architect |', '| ecc-architect |'],
     ];
+    const structured = [
+      ['subagent_type="opensource-forker"', 'subagent_type="ecc-opensource-forker"', 1],
+      ['agents/planner.md', 'agents/ecc-planner.md', 1],
+      ['| planner, architect |', '| ecc-planner, ecc-architect |', 2],
+      ['planner (scope the row)', 'ecc-planner (scope the row)', 1],
+      ['add tests with tdd-guide', 'add tests with ecc-tdd-guide', 1],
+      ['planner, tdd-guide, code-reviewer', 'ecc-planner, ecc-tdd-guide, ecc-code-reviewer', 3],
+    ];
     for (const [input, expected] of cases) {
       const r = tr(input);
       assert.strictEqual(r.content, expected, `input: ${input}`);
       assert.strictEqual(r.replacements, 1, `expected 1 replacement for: ${input}`);
+      assert.strictEqual(r.structuredReplacements, 0, `legacy case counted as structured: ${input}`);
+    }
+    for (const [input, expected, count] of structured) {
+      const r = tr(input);
+      assert.strictEqual(r.content, expected, `input: ${input}`);
+      assert.strictEqual(r.structuredReplacements, count, `structured count for: ${input}`);
+      assert.strictEqual(r.replacements, count, `total count for: ${input}`);
     }
     const untouched = [
       'senior software architect specializing in design',
@@ -342,6 +370,9 @@ function runTests() {
       'Auto-extracted by spec-miner.',
       'npm i -D @types/react',
       'the planner notebook layout',
+      'the planner, architect, and team met',
+      'opensource-sanitizer v1.0.0',
+      'see ecc-pubmed-search for articles',
       'ecc-planner already renamed',
       'Use **ecc-planner** agent',
       '| ecc-architect | x |',
@@ -364,7 +395,7 @@ function runTests() {
     const { checkLinks } = require('../../scripts/cursor-plugin/check-links');
     const { broken, total } = checkLinks();
     assert.strictEqual(broken.agents.size, 0, `broken agent refs: ${[...broken.agents.keys()].join(', ')}`);
-    assert.ok(total <= 14, `baseline grew: ${total} > 14`);
+    assert.strictEqual(total, 0, `broken targets remain: ${total}`);
   });
 
   // 14. validate.js green
