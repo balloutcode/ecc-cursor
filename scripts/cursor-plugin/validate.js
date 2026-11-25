@@ -116,9 +116,23 @@ function validateCommands() {
     const content = fs.readFileSync(file, 'utf8');
     const fm = T.splitFrontmatter(content).frontmatter;
     const rel = path.relative(PLUGIN_ROOT, file);
+    const fileBase = path.basename(file, '.md');
     if (!fm || !T.getFrontmatterField(fm, 'description')) {
       fail(`command without frontmatter description: ${rel}`);
     }
+    const name = T.getFrontmatterField(fm, 'name');
+    if (name !== fileBase) fail(`command name '${name}' != filename '${fileBase}': ${rel}`);
+    if (fm) {
+      for (const line of fm.split(/\r?\n/)) {
+        const key = line.match(/^([A-Za-z][\w-]*):/);
+        if (key && key[1] !== 'name' && key[1] !== 'description') {
+          fail(`command with unsupported frontmatter key '${key[1]}': ${rel}`);
+        }
+      }
+    }
+    if (content.includes('$ARGUMENTS')) fail(`command still contains $ARGUMENTS: ${rel}`);
+    if (content.includes('codeagent-wrapper')) fail(`command still contains codeagent-wrapper: ${rel}`);
+    if (content.includes('.ccg/prompts')) fail(`command still contains .ccg/prompts: ${rel}`);
   }
   return count;
 }

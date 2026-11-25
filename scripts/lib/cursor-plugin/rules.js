@@ -114,9 +114,13 @@ function transformRuleBody(body, namespace) {
  */
 function transformRule({ namespace, relFile, content, nativeContent, agentRefs }) {
   const applyAgentRefs = body => {
-    if (!agentRefs) return { body, agentRefReplacements: 0 };
+    if (!agentRefs) return { body, agentRefReplacements: 0, agentRefStructured: 0 };
     const r = agentRefs(body);
-    return { body: r.content, agentRefReplacements: r.replacements };
+    return {
+      body: r.content,
+      agentRefReplacements: r.replacements,
+      agentRefStructured: r.structuredReplacements || 0,
+    };
   };
 
   if (nativeContent !== null && nativeContent !== undefined) {
@@ -132,6 +136,7 @@ function transformRule({ namespace, relFile, content, nativeContent, agentRefs }
         alwaysApply,
         globs: parsePathsList(frontmatter.replace(/^globs:/m, 'paths:')).length || null,
         agentRefReplacements: renamed.agentRefReplacements,
+        agentRefStructured: renamed.agentRefStructured,
       },
     };
   }
@@ -162,6 +167,7 @@ function transformRule({ namespace, relFile, content, nativeContent, agentRefs }
       globs: globs.length,
       hadFrontmatter: Boolean(parts.frontmatter),
       agentRefReplacements: renamed.agentRefReplacements,
+      agentRefStructured: renamed.agentRefStructured,
     },
   };
 }

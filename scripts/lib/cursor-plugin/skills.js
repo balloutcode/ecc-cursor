@@ -173,6 +173,63 @@ function restateAllowedTools(raw) {
   ].join('\n');
 }
 
+function applyLiteral(content, from, to) {
+  if (!from || !content.includes(from)) return { content, count: 0 };
+  const count = content.split(from).length - 1;
+  return { content: content.split(from).join(to), count };
+}
+
+/** Compiled path-map rules. `builtSkills` is closed over for builtSkillsOnly. */
+function compilePathRules(pathMap, builtSkills) {
+  return (pathMap.rules || []).map(rule => ({
+    ...rule,
+    re: rule.regex ? new RegExp(rule.regex, 'g') : null,
+    builtSkills,
+  }));
+}
+
+function applyPathRulesToLine(line, compiledRules) {
+  let out = line;
+  let replacements = 0;
+  for (const rule of compiledRules) {
+    if (rule.re) {
+      rule.re.lastIndex = 0;
+      out = out.replace(rule.re, (whole, ...groups) => {
+        if (rule.builtSkillsOnly && !rule.builtSkills.has(groups[0])) return whole;
+        replacements += 1;
+        return rule.replace.replace(/\$(\d)/g, (m, idx) => groups[Number(idx) - 1]);
+      });
+    } else {
+      const res = applyLiteral(out, rule.match, rule.replace);
+      out = res.content;
+      replacements += res.count;
+    }
+  }
+  return { out, replacements };
+}
+
+function applyToolTokens(line) {
+  let out = line;
+  let replacements = 0;
+  out = out.replace(/\bTodoWrite\b/g, () => { replacements += 1; return 'the agent task list'; });
+  out = out.replace(/\bNotebookEdit\b/g, () => { replacements += 1; return 'Edit'; });
+  out = out.replace(/\bMultiEdit\b/g, () => { replacements += 1; return 'Edit'; });
+  out = out.replace(/`Bash`/g, () => { replacements += 1; return '`Shell`'; });
+  let prev = null;
+  while (prev !== out) {
+    prev = out;
+    out = out.replace(/Edit([/\\|])Edit/g, 'Edit$1');
+  }
+  return { out, replacements };
+}
+
+function lineSkippedByAllowlist(allowlist, componentName, line) {
+  const entry = allowlist && allowlist[componentName];
+  if (!entry) return false;
+  if (entry.patterns.includes('*')) return true;
+  return entry.patterns.some(pattern => line.includes(pattern));
+}
+
 /**
  * Create the skill markdown transform.
  *
@@ -186,64 +243,12 @@ function restateAllowedTools(raw) {
  * @returns {(content: string, ctx: { skillName: string, isSkillMd: boolean }) => { content: string, meta: object }}
  */
 function createSkillTransform({ pathMap, builtSkills, namespaceGlobs, namespaces, ruleRefs, agentRefs }) {
-  const rules = pathMap.rules.map(r => ({
-    ...r,
-    re: r.regex ? new RegExp(r.regex, 'g') : null,
-  }));
+  const rules = compilePathRules(pathMap, builtSkills);
   const overridesBySkill = new Map();
   for (const [skill, list] of Object.entries(pathMap.skillOverrides || {})) {
     overridesBySkill.set(skill, list);
   }
   const allowlist = pathMap.claudeAllowlist || {};
-
-  function applyLiteral(content, from, to) {
-    if (!content.includes(from)) return { content, count: 0 };
-    const count = content.split(from).length - 1;
-    return { content: content.split(from).join(to), count };
-  }
-
-  function applyPathRules(line) {
-    let out = line;
-    let replacements = 0;
-    for (const r of rules) {
-      if (r.re) {
-        out = out.replace(r.re, (whole, ...groups) => {
-          if (r.builtSkillsOnly && !builtSkills.has(groups[0])) return whole;
-          replacements += 1;
-          return r.replace.replace(/\$(\d)/g, (m, idx) => groups[Number(idx) - 1]);
-        });
-      } else {
-        const res = applyLiteral(out, r.match, r.replace);
-        out = res.content;
-        replacements += res.count;
-      }
-    }
-    return { out, replacements };
-  }
-
-  function applyToolTokens(line) {
-    let out = line;
-    let replacements = 0;
-    out = out.replace(/\bTodoWrite\b/g, () => { replacements += 1; return 'the agent task list'; });
-    out = out.replace(/\bNotebookEdit\b/g, () => { replacements += 1; return 'Edit'; });
-    out = out.replace(/\bMultiEdit\b/g, () => { replacements += 1; return 'Edit'; });
-    out = out.replace(/`Bash`/g, () => { replacements += 1; return '`Shell`'; });
-    // collapse Edit duplicates produced by the token renames (Edit|Edit,
-    // Edit/Edit, Edit\|Edit)
-    let prev = null;
-    while (prev !== out) {
-      prev = out;
-      out = out.replace(/Edit([/\\|])Edit/g, 'Edit$1');
-    }
-    return { out, replacements };
-  }
-
-  function isAllowlistedLine(skillName, line) {
-    const entry = allowlist[skillName];
-    if (!entry) return false;
-    if (entry.patterns.includes('*')) return true;
-    return entry.patterns.some(p => line.includes(p));
-  }
 
   return function transformSkillMarkdown(content, { skillName, isSkillMd }) {
     const meta = {
@@ -255,6 +260,7 @@ function createSkillTransform({ pathMap, builtSkills, namespaceGlobs, namespaces
       allowedToolsRestated: false,
       pathsAdded: 0,
       agentRefsRenamed: 0,
+      agentRefsStructured: 0,
       mcpNeutralized: 0,
       argumentsRewritten: 0,
     };
@@ -284,8 +290,8 @@ function createSkillTransform({ pathMap, builtSkills, namespaceGlobs, namespaces
     // 3. ordered path rules + tool tokens, line-wise with allowlist skips
     const lines = body.split('\n');
     for (let i = 0; i < lines.length; i += 1) {
-      if (isAllowlistedLine(skillName, lines[i])) continue;
-      const p = applyPathRules(lines[i]);
+      if (lineSkippedByAllowlist(allowlist, skillName, lines[i])) continue;
+      const p = applyPathRulesToLine(lines[i], rules);
       const t = applyToolTokens(p.out);
       meta.pathRewrites += p.replacements;
       meta.toolTokens += t.replacements;
@@ -298,6 +304,7 @@ function createSkillTransform({ pathMap, builtSkills, namespaceGlobs, namespaces
     const renamed = agentRefs(body);
     body = renamed.content;
     meta.agentRefsRenamed += renamed.replacements;
+    meta.agentRefsStructured += renamed.structuredReplacements || 0;
     const mcpCount = (body.match(/\bmcp__[a-z0-9-]+__[a-z0-9_-]+/gi) || []).length;
     body = neutralizeMcpRefs(body);
     meta.mcpNeutralized += mcpCount;
@@ -311,9 +318,10 @@ function createSkillTransform({ pathMap, builtSkills, namespaceGlobs, namespaces
       body = body.replace(/\s*$/, '') + restateAllowedTools(allowedTools);
     }
 
-    const out = frontmatter !== null && frontmatter !== undefined
+    let out = frontmatter !== null && frontmatter !== undefined
       ? `---\n${frontmatter}\n---\n${body}`
       : body;
+    out = T.stripClaudeModelPins(out);
     meta.changed = out !== content;
     return { content: out, meta };
   };
@@ -329,5 +337,11 @@ module.exports = {
   collectNamespaceGlobs,
   skillNamespace,
   sanitizeFrontmatter,
+  restateAllowedTools,
+  applyLiteral,
+  compilePathRules,
+  applyPathRulesToLine,
+  applyToolTokens,
+  lineSkippedByAllowlist,
   createSkillTransform,
 };

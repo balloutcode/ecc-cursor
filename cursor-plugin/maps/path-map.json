@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "comment": "Phase-4 path map for the skill transform (scripts/lib/cursor-plugin/skills.js). Ordered rewrite rules for Claude paths in skill markdown: first match per scan position wins (earlier rules consume text before later ones see it). 'match' = literal, 'regex' = JS regex source (global). builtSkillsOnly: the $1 skill name must be in the build. examples: one fixture per rule, asserted by tests/cursor-plugin/skills.test.js. skillOverrides: per-skill literal rewrites applied BEFORE the global rules. claudeAllowlist: skills whose remaining .claude/ lines are intentional (Claude-side subject or shipped-script-verbatim paths); matching lines skip path/tool rules, and the test fails on any .claude/ line outside this list.",
+  "comment": "Path map for the skill and command transforms. Ordered rewrite rules for Claude paths in markdown: first match per scan position wins (earlier rules consume text before later ones see it). 'match' = literal, 'regex' = JS regex source (global). builtSkillsOnly: the $1 skill name must be in the build. examples: one fixture per rule, asserted by tests/cursor-plugin/skills.test.js. skillOverrides: per-skill literal rewrites applied BEFORE the global rules. claudeAllowlist: skills whose remaining .claude/ lines are intentional (Claude-side subject or shipped-script-verbatim paths); matching lines skip path/tool rules, and the test fails on any .claude/ line outside this list.",
   "rules": [
     {
       "id": "plugin-root-var",
@@ -236,6 +236,88 @@
         "match": "- `hermes-imports` for sanitizing a local workflow before sharing it.",
         "replace": "- `opensource-pipeline` for sanitizing a local project before sharing it.",
         "note": "hermes-imports is excluded (Hermes-only); the sanitizing role is covered by the opensource-pipeline family."
+      }
+    ],
+    "tdd-workflow": [
+      {
+        "id": "tdd-artifact-sentence",
+        "match": "If the repository already uses Claude-specific local artifacts, the `.claude/tdd/` location is also acceptable.",
+        "replace": "Prefer `.ecc/tdd/` when the project has no documentation directory of its own.",
+        "note": "Phase-4 rewrote .claude/tdd/ to .ecc/tdd/, which made the Claude-specific sentence refer to the same path twice."
+      }
+    ],
+    "gan-style-harness": [
+      {
+        "id": "gan-shell-harness",
+        "match": "./scripts/gan-harness.sh",
+        "replace": "the ecc-gan-planner, ecc-gan-generator, and ecc-gan-evaluator subagents (the repo-root shell harness is not shipped in this plugin)",
+        "note": "scripts/gan-harness.sh is a repo-root shell script outside the plugin require-closure. check-links fail mode cannot keep a path the build does not ship."
+      }
+    ],
+    "module-regression": [
+      {
+        "id": "reconcile-missing",
+        "match": "python scripts/reconcile.py --module 03",
+        "replace": "python -m reconcile --module 03",
+        "note": "Upstream example points at scripts/reconcile.py, which is not in the repo. The example stays a project-local command and is not a plugin script."
+      }
+    ],
+    "github-ops": [
+      {
+        "id": "release-sh-unshipped",
+        "match": "`scripts/release.sh`",
+        "replace": "the upstream release entrypoint (a repo-root shell script, not shipped in this plugin)",
+        "note": "scripts/release.sh is outside the plugin require-closure. The warning not to use it still applies."
+      }
+    ]
+  },
+  "commandOverrides": {
+    "plan": [
+      {
+        "id": "plan-multi-pointer",
+        "match": "for a dual-model (Codex/Antigravity) plan use /multi-plan",
+        "replace": "for a parallel subagent plan use /multi-plan",
+        "note": "multi-plan no longer calls external model CLIs; it delegates to plugin subagents."
+      }
+    ],
+    "code-review": [
+      {
+        "id": "code-review-agents",
+        "match": "# Code Review",
+        "replace": "# Code Review\n\nDelegated review uses the `ecc-code-reviewer` and `ecc-security-reviewer` subagents, each in its own environment when both run. The checklist below is what they apply.",
+        "note": "The upstream command is a checklist and never names an agent. The phase-5 chain requires /code-review to point at agents that exist in the plugin."
+      }
+    ]
+  },
+  "commandAllowlist": {
+    "security-scan": {
+      "reason": "The command audits .claude/ directories; that path is the subject, same as the security-scan skill.",
+      "patterns": [".claude/"]
+    },
+    "hookify": {
+      "reason": "The shipped hookify scanner reads .claude/hookify.*.local.md verbatim; the command must name that path.",
+      "patterns": [".claude/hookify"]
+    },
+    "hookify-configure": {
+      "reason": "The shipped hookify scanner reads .claude/hookify.*.local.md verbatim; the command must name that path.",
+      "patterns": [".claude/hookify"]
+    },
+    "hookify-help": {
+      "reason": "The shipped hookify scanner reads .claude/hookify.*.local.md verbatim; the command must name that path.",
+      "patterns": [".claude/hookify"]
+    },
+    "hookify-list": {
+      "reason": "The shipped hookify scanner reads .claude/hookify.*.local.md verbatim; the command must name that path.",
+      "patterns": [".claude/hookify"]
+    }
+  },
+  "agentOverrides": {
+    "agent-evaluator": [
+      {
+        "id": "evaluate-py",
+        "match": "`scripts/evaluate.py`",
+        "replace": "`skills/agent-self-evaluation/scripts/evaluate.py`",
+        "note": "The evaluator script ships inside the skill. An agent body cannot use the intra-skill scripts/ resolution that check-links gives skill files."
       }
     ]
   },

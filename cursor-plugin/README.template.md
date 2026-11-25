@@ -16,8 +16,10 @@ directly; change the sources in `balloutcode/ecc-cursor` and rebuild.
 
 ## Install
 
-- Local development: `node scripts/cursor-plugin/install-local.js` in the
-  fork, then `Developer: Reload Window` in Cursor.
+- Local development: from a checkout of the fork, run the install-local
+  Node program (documented in docs/cursor-plugin/VERIFY.md), then fully quit
+  and reopen Cursor. That program is a fork tool; it is not part of the
+  installed plugin.
 - From GitHub (release branch): Customize -> Plugins -> From GitHub Repository
   -> `https://github.com/balloutcode/ecc-cursor` (phase 8).
 

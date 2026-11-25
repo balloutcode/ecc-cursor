@@ -44,6 +44,11 @@ function agentModelInherit(content) {
   return `---\n${updated}\n---\n${parts.body.replace(/^\r?\n/, '')}`;
 }
 
+/** Drop Claude model pins (`model: opus`, `model: "fable"`, ...) from built text. */
+function stripClaudeModelPins(content) {
+  return content.replace(/\bmodel:\s*["']?(?:sonnet|opus|haiku|fable)(?![\w-])["']?/gi, 'model: inherit');
+}
+
 function hasForbiddenModel(content) {
   const parts = splitFrontmatter(content);
   const model = getFrontmatterField(parts.frontmatter, 'model');
@@ -72,6 +77,7 @@ module.exports = {
   splitFrontmatter,
   getFrontmatterField,
   agentModelInherit,
+  stripClaudeModelPins,
   hasForbiddenModel,
   flattenRuleName,
   toPosix,
