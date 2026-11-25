@@ -102,12 +102,12 @@ function runTests() {
     process.exit(1);
   }
 
-  t('report.skills: 322 upstream skills, 68 lang skills with paths, 21 path rules, 17 allowlisted', () => {
+  t('report.skills: 322 upstream skills, 68 lang skills with paths, 23 path rules, 17 allowlisted', () => {
     assert.strictEqual(report.skills.total, 322);
     assert.strictEqual(report.counts.skills, 325); // 322 + 3 context skills
     assert.strictEqual(report.skills.langSkillsWithPaths, 68);
     assert.strictEqual(report.skills.langSkillNames.length, 68);
-    assert.strictEqual(report.skills.pathMapRules, 21);
+    assert.strictEqual(report.skills.pathMapRules, 23);
     assert.strictEqual(report.skills.allowlisted.length, 17);
     assert.strictEqual(report.skills.allowedToolsRestated, 2); // inherit-legacy-style, videodb
     assert.ok(report.skills.pathRewrites > 0, 'no path rewrites recorded');

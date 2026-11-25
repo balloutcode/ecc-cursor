@@ -292,6 +292,48 @@ function runTests() {
     assert.ok(spec.includes('Auto-extracted by spec-miner.'), 'output signature was rewritten');
   });
 
+  t('command path fixes: plugin fallback, project skills, homunculus, agent data home', () => {
+    const read = name => fs.readFileSync(path.join(commandsDir, `${name}.md`), 'utf8');
+    const installed = '%USERPROFILE%/.cursor/plugins/local/ecc-cursor/skills/continuous-learning-v2/scripts/instinct-cli.py';
+    for (const name of ['evolve', 'instinct-import', 'prune', 'promote', 'projects']) {
+      const text = read(name);
+      assert.ok(text.includes(installed), `${name} fallback is not the installed plugin copy`);
+      assert.ok(text.includes('use the installed plugin copy'), `${name} prose still describes a manual Claude install`);
+      assert.ok(!text.includes('CLAUDE_PLUGIN_ROOT'), `${name} still names CLAUDE_PLUGIN_ROOT`);
+      assert.ok(text.includes('$ECC_PLUGIN_ROOT/skills/continuous-learning-v2/scripts/instinct-cli.py'), `${name} primary invocation lost ECC_PLUGIN_ROOT`);
+    }
+    const status = read('instinct-status');
+    assert.ok(status.includes('legacy `~/.claude/skills/continuous-learning-v2/`'), 'legacy skill warning was rewritten');
+    assert.ok(status.includes('`ECC_PLUGIN_ROOT`'), 'instinct-status prose still says CLAUDE_PLUGIN_ROOT');
+    assert.ok(!status.includes('CLAUDE_PLUGIN_ROOT'), 'instinct-status still names CLAUDE_PLUGIN_ROOT');
+    assert.ok(status.includes('~/.local/share/ecc-homunculus/projects/'), 'instinct-status store was not aligned');
+    assert.ok(!status.includes('<ECC_AGENT_DATA_HOME>/homunculus'), 'instincts were sent to agent data home');
+    for (const name of ['evolve', 'instinct-import', 'promote', 'projects']) {
+      const text = read(name);
+      assert.ok(text.includes('~/.local/share/ecc-homunculus'), `${name} homunculus path not aligned`);
+      assert.ok(!text.includes('~/.claude/homunculus') && !text.includes('<ECC_AGENT_DATA_HOME>/homunculus'), `${name} homunculus path still wrong`);
+    }
+    const learn = read('learn-eval');
+    const created = read('skill-create');
+    assert.ok(learn.includes('`.cursor/skills/<pattern-name>/SKILL.md` in current project'), 'learn-eval project skills path');
+    assert.ok(created.includes('`.cursor/skills/`'), 'skill-create project root');
+    assert.ok(!learn.includes('.ecc/skills/') && !created.includes('.ecc/skills/'), 'project skills became .ecc/skills');
+    const cost = read('cost-report');
+    assert.ok(cost.includes('process.env.ECC_AGENT_DATA_HOME'), 'cost-report snippet ignores ECC_AGENT_DATA_HOME');
+    assert.ok(cost.includes('".cursor","ecc"'), 'cost-report snippet misses the Cursor agent-data default');
+    assert.ok(!cost.includes('".claude"'), 'cost-report snippet still joins .claude');
+    const quoted = /['"]\.claude['"]/;
+    const slashCollision = /(?:^|[\s`"(])\/(?:plan-canvas|ecc-guide)(?![\w-])/m;
+    for (const file of walkMd(commandsDir)) {
+      const text = fs.readFileSync(file, 'utf8');
+      const base = path.basename(file);
+      assert.ok(!quoted.test(text), `${base} still has a quoted .claude path`);
+      assert.ok(!slashCollision.test(text), `${base} still has /plan-canvas or /ecc-guide`);
+    }
+    const cli = path.join(OUT_ROOT, 'skills', 'continuous-learning-v2', 'scripts', 'instinct-cli.py');
+    assert.ok(fs.existsSync(cli), 'plugin skill script instinct-cli.py missing');
+  });
+
   t('check-links fail mode exits 0 with no broken targets', () => {
     const { total } = checkLinks();
     assert.strictEqual(total, 0, `broken targets: ${total}`);
